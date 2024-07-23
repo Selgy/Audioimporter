@@ -22,14 +22,16 @@ const Main: React.FC = () => {
     const [debugLog, setDebugLog] = useState<string[]>([]);
     const [isAddingBinding, setIsAddingBinding] = useState(false);
     const [isListeningForKey, setIsListeningForKey] = useState(false);
-    const [pressedKeys, setPressedKeys] = useState<Set<string>>(new Set());
+    const isListeningForKeyRef = useRef(isListeningForKey);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const socketRef = useRef<WebSocket | null>(null);
-    const [isListening, setIsListening] = useState(false);
     
     useEffect(() => {
         console.log('useEffect hook is running');
-        loadConfig();
+        startWebSocketConnection();
+        loadConfig(); // Make sure to load config on mount
+
+        isListeningForKeyRef.current = isListeningForKey; // Initialize ref with current state
     
         return () => {
             if (socketRef.current) {
@@ -38,6 +40,51 @@ const Main: React.FC = () => {
         };
     }, []);
 
+    useEffect(() => {
+        isListeningForKeyRef.current = isListeningForKey; // Sync ref with state whenever it changes
+    }, [isListeningForKey]);
+    
+    const startWebSocketConnection = useCallback(() => {
+        if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+            appendToDebugLog("WebSocket already connected");
+            return;
+        }
+    
+        appendToDebugLog("Establishing WebSocket connection...");
+        socketRef.current = new WebSocket('ws://localhost:7878');
+    
+        socketRef.current.onopen = () => {
+            appendToDebugLog("Connected to Rust server");
+        };
+    
+        socketRef.current.onmessage = (event) => {
+            const data = event.data;
+            appendToDebugLog(`Received message: ${data}`);
+            appendToDebugLog(`Current isListeningForKey state: ${isListeningForKeyRef.current}`);
+            if (typeof data === 'string' && data.startsWith("COMBO:") && isListeningForKeyRef.current) {
+                const combo = data.split(":")[1];
+                const sortedCombo = combo.split('+').sort().join('+');
+                appendToDebugLog(`Processed combo: ${sortedCombo}`);
+                addNewKeyBind(sortedCombo);
+                stopListening(); // Stop listening after adding a key bind
+            } else {
+                appendToDebugLog(`Message not processed. Reason: Not listening for key`);
+            }
+        };
+    
+        socketRef.current.onerror = (error: Event) => {
+            if (error instanceof ErrorEvent) {
+                appendToDebugLog(`WebSocket Error: ${error.message}`);
+            } else {
+                appendToDebugLog(`WebSocket Error: Unknown error`);
+            }
+        };
+    
+        socketRef.current.onclose = (event: CloseEvent) => {
+            appendToDebugLog(`Disconnected from Rust server: ${event.reason}`);
+        };
+    }, []);
+    
     const appendToDebugLog = (message: string) => {
         console.log('Debug log:', message);
         setDebugLog(prevLog => [...prevLog, message]);
@@ -62,9 +109,10 @@ const Main: React.FC = () => {
 
     const saveConfig = (newConfig: Config) => {
         try {
+            appendToDebugLog(`Saving config: ${JSON.stringify(newConfig)}`);
             localStorage.setItem('config', JSON.stringify(newConfig));
-            setConfig(newConfig);
             appendToDebugLog('Config saved successfully');
+            setConfig(newConfig); // This should be after saving config to ensure UI updates
         } catch (error: unknown) {
             if (error instanceof Error) {
                 appendToDebugLog(`Error saving config: ${error.message}`);
@@ -76,73 +124,41 @@ const Main: React.FC = () => {
 
     const startKeyListener = useCallback(() => {
         if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-          appendToDebugLog("WebSocket already connected");
-          return;
+            setIsListeningForKey(true);
+            appendToDebugLog("Started key listener. isListeningForKey set to true");
+        } else {
+            appendToDebugLog("WebSocket connection is not open.");
         }
-      
-        appendToDebugLog("Establishing WebSocket connection...");
-        socketRef.current = new WebSocket('ws://localhost:7878');
-      
-        socketRef.current.onopen = () => {
-          appendToDebugLog("Connected to Rust server");
-          setIsListeningForKey(true);
-        };
-      
-        socketRef.current.onmessage = (event) => {
-          const data = event.data;
-          appendToDebugLog(`Received message: ${data}`);
-          if (typeof data === 'string' && data.startsWith("COMBO:")) {
-            const combo = data.split(":")[1];
-            const sortedCombo = combo.split('+').sort().join('+');
-            addNewKeyBind(sortedCombo);
-            stopListening(); // Stop listening after adding a key bind
-          }
-        };
-      
-        socketRef.current.onerror = (error: Event) => {
-          if (error instanceof ErrorEvent) {
-            appendToDebugLog(`WebSocket Error: ${error.message}`);
-          } else {
-            appendToDebugLog(`WebSocket Error: Unknown error`);
-          }
-          stopListening();
-        };
-      
-        socketRef.current.onclose = (event: CloseEvent) => {
-          appendToDebugLog(`Disconnected from Rust server: ${event.reason}`);
-          stopListening();
-        };
-      }, []);
-      
-      const stopListening = () => {
-        if (socketRef.current) {
-          socketRef.current.close();
-        }
+    }, []);
+    
+    const stopListening = () => {
+        appendToDebugLog("Stopping listening for key. isListeningForKey set to false");
         setIsListeningForKey(false);
         setIsAddingBinding(false);
-      };
-
-      const addNewKeyBind = (keyCombination: string) => {
-        const sortedCombination = keyCombination.split('+').sort().join('+');
-        setConfig((prevConfig: Config) => {
-          if (!prevConfig[sortedCombination]) {
-            const newConfig = { ...prevConfig, [sortedCombination]: { volume: 0, pitch: 0, track: 'A1', path: '' } };
-            saveConfig(newConfig);
-            appendToDebugLog(`New key binding added: ${sortedCombination}`);
-            stopListening(); // Stop listening after successfully adding a new key bind
-            return newConfig;
-          } else {
-            appendToDebugLog(`Key combination already exists: ${sortedCombination}`);
-            stopListening(); // Also stop listening if the combination already exists
-            return prevConfig;
-          }
-        });
-      };
-
+    };
     
+    const addNewKeyBind = (keyCombination: string) => {
+        const sortedCombination = keyCombination.split('+').sort().join('+');
+        appendToDebugLog(`Attempting to add key bind: ${sortedCombination}`);
+        setConfig((prevConfig: Config) => {
+            appendToDebugLog(`Current config: ${JSON.stringify(prevConfig)}`);
+            if (!prevConfig[sortedCombination]) {
+                const newConfig = { ...prevConfig, [sortedCombination]: { volume: 0, pitch: 0, track: 'A1', path: '' } };
+                appendToDebugLog(`New config before save: ${JSON.stringify(newConfig)}`);
+                saveConfig(newConfig);
+                appendToDebugLog(`New key binding added: ${sortedCombination}`);
+                return newConfig;
+            } else {
+                appendToDebugLog(`Key combination already exists: ${sortedCombination}`);
+                return prevConfig;
+            }
+        });
+    };
+
     const addBinding = () => {
         if (!isListeningForKey) {
             setIsAddingBinding(true);
+            appendToDebugLog(`Add binding clicked. isListeningForKey set to true`);
             startKeyListener();
         }
     };
@@ -173,6 +189,7 @@ const Main: React.FC = () => {
     const updateBinding = (key: string, value: AudioBinding) => {
         setConfig((prevConfig: Config) => {
             const newConfig = { ...prevConfig, [key]: value };
+            appendToDebugLog(`Updating config for key: ${key} with value: ${JSON.stringify(value)}`);
             saveConfig(newConfig);
             appendToDebugLog(`Binding updated for ${key}`);
             return newConfig;
@@ -182,6 +199,7 @@ const Main: React.FC = () => {
     const deleteBinding = (key: string) => {
         setConfig((prevConfig: Config) => {
             const { [key]: _, ...newConfig } = prevConfig;
+            appendToDebugLog(`Deleting binding for key: ${key}`);
             saveConfig(newConfig);
             appendToDebugLog(`Binding deleted for ${key}`);
             return newConfig;
