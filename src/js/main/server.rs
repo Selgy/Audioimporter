@@ -39,6 +39,18 @@ fn map_keycode(key: &Keycode) -> String {
         "Numpad7" => "Numpad7".to_string(),
         "Numpad8" => "Numpad8".to_string(),
         "Numpad9" => "Numpad9".to_string(),
+        "F1" => "F1".to_string(),
+        "F2" => "F2".to_string(),
+        "F3" => "F3".to_string(),
+        "F4" => "F4".to_string(),
+        "F5" => "F5".to_string(),
+        "F6" => "F6".to_string(),
+        "F7" => "F7".to_string(),
+        "F8" => "F8".to_string(),
+        "F9" => "F9".to_string(),
+        "F10" => "F10".to_string(),
+        "F11" => "F11".to_string(),
+        "F12" => "F12".to_string(),
         "NumpadSlash" => "NumpadDivide".to_string(),
         "NumpadAsterisk" => "NumpadMultiply".to_string(),
         "NumpadMinus" => "NumpadSubtract".to_string(),
@@ -53,7 +65,7 @@ fn map_keycode(key: &Keycode) -> String {
         "ShiftRight" => "RShift".to_string(),
         "MetaLeft" => "LCommand".to_string(),
         "MetaRight" => "RCommand".to_string(),
-        _ => format!("{:?}", key)
+        _ => format!("{:?}", key),
     }
 }
 
@@ -67,31 +79,42 @@ async fn accept_connection(stream: TcpStream) {
 
     let (mut write, _read) = ws_stream.split();
     let device_state = Arc::new(DeviceState::new());
-    let last_keys = Arc::new(Mutex::new(HashSet::new()));
+    let last_keys = Arc::new(Mutex::new(HashSet::new())) as Arc<Mutex<HashSet<Keycode>>>;
 
     loop {
         let keys: HashSet<Keycode> = device_state.get_keys().into_iter().collect();
         let mut last_keys_guard = last_keys.lock().await;
-        
-        if keys != *last_keys_guard {
-            let combo = keys.iter()
+
+        // Aggregate key presses over time
+        if !keys.is_empty() {
+            for key in &keys {
+                last_keys_guard.insert(key.clone());
+            }
+        }
+
+        // Process the combo after a short delay
+        if keys.is_empty() && !last_keys_guard.is_empty() {
+            tokio::time::sleep(tokio::time::Duration::from_millis(20)).await;
+
+            let combo = last_keys_guard
+                .iter()
                 .map(|k| map_keycode(k))
                 .collect::<Vec<String>>()
                 .join("+");
-            
+
             if !combo.is_empty() {
-                let message = format!("KEYPRESS:{}", combo);
-                if let Err(e) = write.send(Message::Text(message.clone())).await {
-                    println!("WebSocket send error: {}", e);
-                    break;
-                }
-                println!("Sent keypress: {}", combo);
+                let message = format!("COMBO:{}", combo);
+                write.send(Message::Text(message.clone())).await.unwrap();
+                println!("Sent combo: {}", combo);
             }
-            
-            *last_keys_guard = keys;
+
+            last_keys_guard.clear();
         }
+
         
-        drop(last_keys_guard);
-        tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+    
+        tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+
     }
+    
 }

@@ -25,12 +25,12 @@ const Main: React.FC = () => {
     const isListeningForKeyRef = useRef(isListeningForKey);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const socketRef = useRef<WebSocket | null>(null);
-    
+
     useEffect(() => {
         console.log('useEffect hook is running');
         startWebSocketConnection();
-        loadConfig(); // Make sure to load config on mount
-
+        loadConfig(); // Load config on mount
+    
         isListeningForKeyRef.current = isListeningForKey; // Initialize ref with current state
     
         return () => {
@@ -43,7 +43,7 @@ const Main: React.FC = () => {
     useEffect(() => {
         isListeningForKeyRef.current = isListeningForKey; // Sync ref with state whenever it changes
     }, [isListeningForKey]);
-    
+
     const startWebSocketConnection = useCallback(() => {
         if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
             appendToDebugLog("WebSocket already connected");
@@ -60,15 +60,17 @@ const Main: React.FC = () => {
         socketRef.current.onmessage = (event) => {
             const data = event.data;
             appendToDebugLog(`Received message: ${data}`);
-            appendToDebugLog(`Current isListeningForKey state: ${isListeningForKeyRef.current}`);
+    
             if (typeof data === 'string' && data.startsWith("COMBO:") && isListeningForKeyRef.current) {
                 const combo = data.split(":")[1];
                 const sortedCombo = combo.split('+').sort().join('+');
                 appendToDebugLog(`Processed combo: ${sortedCombo}`);
-                addNewKeyBind(sortedCombo);
-                stopListening(); // Stop listening after adding a key bind
-            } else {
-                appendToDebugLog(`Message not processed. Reason: Not listening for key`);
+    
+                // Only add the keybind if the listener is active
+                if (isListeningForKeyRef.current) {
+                    addNewKeyBind(sortedCombo);
+                    stopListening(); // Stop listening after registering the keybind
+                }
             }
         };
     
@@ -84,7 +86,7 @@ const Main: React.FC = () => {
             appendToDebugLog(`Disconnected from Rust server: ${event.reason}`);
         };
     }, []);
-    
+
     const appendToDebugLog = (message: string) => {
         console.log('Debug log:', message);
         setDebugLog(prevLog => [...prevLog, message]);
@@ -130,23 +132,26 @@ const Main: React.FC = () => {
             appendToDebugLog("WebSocket connection is not open.");
         }
     }, []);
-    
+
     const stopListening = () => {
         appendToDebugLog("Stopping listening for key. isListeningForKey set to false");
         setIsListeningForKey(false);
         setIsAddingBinding(false);
     };
-    
+
     const addNewKeyBind = (keyCombination: string) => {
+        appendToDebugLog(`Adding new key bind: ${keyCombination}`);
         const sortedCombination = keyCombination.split('+').sort().join('+');
-        appendToDebugLog(`Attempting to add key bind: ${sortedCombination}`);
-        setConfig((prevConfig: Config) => {
-            appendToDebugLog(`Current config: ${JSON.stringify(prevConfig)}`);
+        setConfig((prevConfig) => {
+            appendToDebugLog(`Previous config: ${JSON.stringify(prevConfig)}`);
             if (!prevConfig[sortedCombination]) {
-                const newConfig = { ...prevConfig, [sortedCombination]: { volume: 0, pitch: 0, track: 'A1', path: '' } };
+                const newConfig = {
+                    ...prevConfig,
+                    [sortedCombination]: { volume: 0, pitch: 0, track: 'A1', path: '' }
+                };
                 appendToDebugLog(`New config before save: ${JSON.stringify(newConfig)}`);
                 saveConfig(newConfig);
-                appendToDebugLog(`New key binding added: ${sortedCombination}`);
+                appendToDebugLog(`Key binding ${sortedCombination} added successfully`);
                 return newConfig;
             } else {
                 appendToDebugLog(`Key combination already exists: ${sortedCombination}`);
@@ -162,7 +167,7 @@ const Main: React.FC = () => {
             startKeyListener();
         }
     };
-    
+
     const selectAudioFile = (key: string) => {
         appendToDebugLog(`Attempting to select audio file for key: ${key}`);
         if (fileInputRef.current) {
