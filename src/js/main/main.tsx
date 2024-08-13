@@ -60,19 +60,27 @@ const Main: React.FC = () => {
         socketRef.current.onmessage = (event) => {
             const data = event.data;
             appendToDebugLog(`Received message: ${data}`);
-    
-            if (typeof data === 'string' && data.startsWith("COMBO:") && isListeningForKeyRef.current) {
+        
+            if (typeof data === 'string' && data.startsWith("COMBO:")) {
                 const combo = data.split(":")[1];
                 const sortedCombo = combo.split('+').sort().join('+');
                 appendToDebugLog(`Processed combo: ${sortedCombo}`);
-    
-                // Only add the keybind if the listener is active
+        
+                // Check if we are in the key listening mode
                 if (isListeningForKeyRef.current) {
-                    addNewKeyBind(sortedCombo);
-                    stopListening(); // Stop listening after registering the keybind
+                    addNewKeyBind(sortedCombo);  // Add the key bind
+                    stopListening();  // Stop listening after registering the keybind
+                }
+        
+                // Check if the combo exists in the config and execute the script if it does
+                const binding = config[sortedCombo];
+                if (binding) {
+                    //alert(`Triggering executePremiereProScript for combo: ${sortedCombo}`);
+                    executePremiereProScript(binding.path, parseInt(binding.track.replace('A', '')));
                 }
             }
         };
+        
     
         socketRef.current.onerror = (error: Event) => {
             if (error instanceof ErrorEvent) {
@@ -201,6 +209,54 @@ const Main: React.FC = () => {
         });
     };
 
+
+    const executePremiereProScript = (filePath: string, track: number) => {
+        // Ensure filePath is defined and track is a valid number
+        if (!filePath || isNaN(track)) {
+            alert("Invalid file path or track number.");
+            return;
+        }
+    
+        // Define the ExtendScript function dynamically
+        const script = `
+            function importAudioToTrack(filePath, trackIndex) {
+                // Ensure the Project panel is active
+                app.project.rootItem;
+    
+                // Get the active sequence directly
+                var activeSequence = app.project.activeSequence;
+    
+    
+                // Import the audio file
+                var importResult = app.project.importFiles([filePath], 1, app.project.rootItem, false);
+    
+                // Attempt to retrieve the imported item from the project items
+                var importedItem = app.project.rootItem.children[app.project.rootItem.children.numItems - 1];
+    
+    
+                // Get the specified audio track
+                var audioTrack = activeSequence.audioTracks[trackIndex - 1];
+
+                // Get the current playhead position
+                var time = activeSequence.getPlayerPosition();
+    
+                // Place the imported item on the audio track at the current playhead position
+                var newClip = audioTrack.insertClip(importedItem, time.seconds); // Insert clip at the current time
+    
+
+            }
+    
+            // Call the function with the provided file path and track index
+            importAudioToTrack("${filePath.replace(/\\/g, '\\\\')}", ${track});
+        `;
+    
+        // Execute the ExtendScript function in Premiere Pro
+        window.__adobe_cep__.evalScript(script, (result: string) => {
+        });
+    };
+    
+    
+    
     const deleteBinding = (key: string) => {
         setConfig((prevConfig: Config) => {
             const { [key]: _, ...newConfig } = prevConfig;
