@@ -85,17 +85,16 @@ async fn accept_connection(stream: TcpStream) {
         let keys: HashSet<Keycode> = device_state.get_keys().into_iter().collect();
         let mut last_keys_guard = last_keys.lock().await;
 
-        // Aggregate key presses over time
+        // Log detected keys and track the currently pressed keys
         if !keys.is_empty() {
             for key in &keys {
+                println!("Key detected: {:?}", key);
                 last_keys_guard.insert(key.clone());
             }
         }
 
-        // Process the combo after a short delay
+        // If keys are released and a combo was detected, process it
         if keys.is_empty() && !last_keys_guard.is_empty() {
-            tokio::time::sleep(tokio::time::Duration::from_millis(20)).await;
-
             let combo = last_keys_guard
                 .iter()
                 .map(|k| map_keycode(k))
@@ -103,6 +102,7 @@ async fn accept_connection(stream: TcpStream) {
                 .join("+");
 
             if !combo.is_empty() {
+                println!("Combo detected: {}", combo);
                 let message = format!("COMBO:{}", combo);
                 write.send(Message::Text(message.clone())).await.unwrap();
                 println!("Sent combo: {}", combo);
@@ -111,10 +111,6 @@ async fn accept_connection(stream: TcpStream) {
             last_keys_guard.clear();
         }
 
-        
-    
-        tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
-
+        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
     }
-    
 }
