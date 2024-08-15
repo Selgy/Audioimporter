@@ -192,14 +192,40 @@ const Main: React.FC = () => {
                 const data = event.data;
                 appendToDebugLog(`Received message: ${data}`);
                 
-                if (typeof data === 'string' && data.startsWith("CONFIG:")) {
-                    const configData = JSON.parse(data.replace("CONFIG:", ""));
-                    setConfig(configData);
-                    appendToDebugLog('Config loaded successfully from server');
+                if (typeof data === 'string') {
+                    if (data.startsWith("CONFIG:")) {
+                        const configData = JSON.parse(data.replace("CONFIG:", ""));
+                        setConfig(configData);
+                        appendToDebugLog('Config loaded successfully from server');
+                    } else if (data.startsWith("COMBO:")) {
+                        const combo = data.replace("COMBO:", "");
+                        appendToDebugLog(`Combo received: ${combo}`);
+                        handleCombo(combo); // Handle the combo here
+                    }
                 }
             };
         }
-    }, []);
+    }, [config]);
+
+    const handleCombo = (combo: string) => {
+        appendToDebugLog(`Handling combo: ${combo}`);
+        
+        // Normalize the combo by sorting the keys
+        const normalizedCombo = combo.split('+').sort().join('+');
+        appendToDebugLog(`Normalized combo: ${normalizedCombo}`);
+        
+        if (config[normalizedCombo]) {
+            const binding = config[normalizedCombo];
+            if (binding.path) {
+                executePremiereProScript(binding.path, parseInt(binding.track.replace('A', ''), 10));
+            } else {
+                appendToDebugLog(`No path specified for combo: ${normalizedCombo}`);
+            }
+        } else {
+            appendToDebugLog(`Combo ${normalizedCombo} not found in config.`);
+        }
+    };
+    
     
     
     
