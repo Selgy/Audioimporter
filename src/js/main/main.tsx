@@ -304,39 +304,104 @@ const Main: React.FC = () => {
         });
     };
 
+    
+    const formatKeyCombination = (keyCombination: string): string => {
+        const keyMap: { [key: string]: string } = {
+            'LAlt': 'Alt',
+            'RAlt': 'Alt',
+            'LControl': 'Ctrl',
+            'RControl': 'Ctrl',
+            'ControlLeft': 'Ctrl',
+            'ControlRight': 'Ctrl',
+            'Numpad1': '1',
+            'Numpad2': '2',
+            'Numpad3': '3',
+            'Numpad4': '4',
+            'Numpad5': '5',
+            'Numpad6': '6',
+            'Numpad7': '7',
+            'Numpad8': '8',
+            'Numpad9': '9',
+            'Numpad0': '0',
+            // Add more key mappings as needed
+        };
+    
+        const priority = ['Ctrl', 'Shift', 'Alt'];
+
+        const sortedKeys = keyCombination
+            .split('+')
+            .map(key => keyMap[key] || key)
+            .sort((a, b) => {
+                const aIndex = priority.indexOf(a);
+                const bIndex = priority.indexOf(b);
+    
+                if (aIndex === -1 && bIndex === -1) return a.localeCompare(b);
+                if (aIndex === -1) return 1;
+                if (bIndex === -1) return -1;
+                return aIndex - bIndex;
+            });
+    
+        return sortedKeys.join('+');
+    };
+    
+    const extractFileName = (filePath: string): string => {
+        return filePath.split('\\').pop()?.split('/').pop() || ''; // Handles both Windows and Unix-style paths
+    };
+    
+
     return (
         <div style={{ fontFamily: 'Roboto, sans-serif', backgroundColor: '#1e2057', color: '#ffffff', padding: '10px' }}>
-            <h1 style={{ color: '#ff5b3b' }}>Premiere Pro Key Bindings</h1>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', backgroundColor: '#2e2f77', padding: '10px', borderRadius: '5px' }}>
-                <input
-                    type="text"
-                    readOnly
-                    value={isListeningForKey ? 'Press a key combination...' : 'Click Add Binding to start'}
-                    style={{ width: '250px', padding: '6px', backgroundColor: '#3e41a8', color: '#ffffff', border: 'none', borderRadius: '2px' }}
-                />
-                <button 
-                    onClick={addBinding}
-                    disabled={isListeningForKey}
-                    style={{ 
-                        width: '150px', 
-                        padding: '6px', 
-                        backgroundColor: isListeningForKey ? '#2e3177' : '#4e52ff', 
-                        color: '#ffffff', 
-                        borderRadius: '2px', 
-                        border: 'none',
-                        cursor: isListeningForKey ? 'not-allowed' : 'pointer'
-                    }}
-                >
-                    {isListeningForKey ? 'Listening...' : 'Add Binding'}
-                </button>
+            <div style={{ marginBottom: '15px', padding: '10px', backgroundColor: '#2e2f77', borderRadius: '5px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <input
+                        type="text"
+                        readOnly
+                        value={isListeningForKey ? 'Press a key combination...' : 'Click Add Binding to start'}
+                        style={{ width: '250px', padding: '6px', backgroundColor: '#3e41a8', color: '#ffffff', border: 'none', borderRadius: '2px' }}
+                    />
+                    <button 
+                        onClick={addBinding}
+                        disabled={isListeningForKey}
+                        style={{ 
+                            width: '150px', 
+                            padding: '6px', 
+                            backgroundColor: isListeningForKey ? '#2e3177' : '#4e52ff', 
+                            color: '#ffffff', 
+                            borderRadius: '2px', 
+                            border: 'none',
+                            cursor: isListeningForKey ? 'not-allowed' : 'pointer'
+                        }}
+                    >
+                        {isListeningForKey ? 'Listening...' : 'Add Binding'}
+                    </button>
+                </div>
             </div>
-            <input type="file" ref={fileInputRef} style={{ display: 'none' }} accept="audio/*" />
+    
+            {/* Keybind Rows */}
             <div>
                 {Object.keys(config).map((key) => (
                     <div key={key} style={{ display: 'flex', alignItems: 'center', marginBottom: '10px', backgroundColor: '#2e2f77', padding: '10px', borderRadius: '5px' }}>
-                        <input type="text" readOnly value={key} style={{ width: '100px', padding: '6px', backgroundColor: '#3e41a8', color: '#ffffff', border: 'none', borderRadius: '2px', marginRight: '10px' }} />
+                        <button 
+                            onClick={() => deleteBinding(key)} 
+                            style={{ 
+                                width: '30px', 
+                                height: '30px', 
+                                padding: '6px', 
+                                backgroundColor: 'transparent', 
+                                color: '#ff5b3b', 
+                                borderRadius: '50%', 
+                                border: 'none', 
+                                cursor: 'pointer', 
+                                fontSize: '16px', 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                justifyContent: 'center', 
+                                marginRight: '10px'
+                            }}>
+                            ✖
+                        </button>
+                        <input type="text" readOnly value={formatKeyCombination(key)} style={{ width: '70px', padding: '6px', backgroundColor: '#3e41a8', color: '#ffffff', border: 'none', borderRadius: '2px', marginRight: '10px', textAlign: 'center' }} />
                         <button onClick={() => console.log(`Edit binding for ${key}`)} style={{ width: '50px', padding: '6px', backgroundColor: '#4e52ff', color: '#ffffff', borderRadius: '2px', border: 'none', marginRight: '10px' }}>Edit</button>
-                        <button onClick={() => deleteBinding(key)} style={{ width: '50px', padding: '6px', backgroundColor: '#ff5b3b', color: '#ffffff', borderRadius: '2px', border: 'none', marginRight: '10px' }}>Delete</button>
                         <select 
                             value={config[key].track} 
                             onChange={(e) => updateBinding(key, { ...config[key], track: e.target.value })} 
@@ -349,12 +414,12 @@ const Main: React.FC = () => {
                         <input 
                             type="text" 
                             readOnly 
-                            value={config[key].path} 
-                            style={{ width: '200px', padding: '6px', backgroundColor: '#3e41a8', color: '#ffffff', border: 'none', borderRadius: '2px', marginRight: '10px' }} 
+                            value={extractFileName(config[key].path)} 
+                            style={{ width: '120px', padding: '7px', backgroundColor: '#3e41a8', color: '#ffffff', border: 'none', borderRadius: '2px', marginRight: '10px' }} 
                         />
                         <button 
                             onClick={() => selectAudioFile(key)} 
-                            style={{ width: '100px', padding: '6px', backgroundColor: '#4e52ff', color: '#ffffff', borderRadius: '2px', border: 'none', marginRight: '10px' }}
+                            style={{ width: '120px', padding: '6px', backgroundColor: '#4e52ff', color: '#ffffff', borderRadius: '2px', border: 'none', marginRight: '10px' }}
                         >
                             Select audio...
                         </button>
@@ -362,25 +427,30 @@ const Main: React.FC = () => {
                             type="number" 
                             value={config[key].volume} 
                             onChange={(e) => updateBinding(key, { ...config[key], volume: parseInt(e.target.value) })} 
-                            style={{ width: '50px', padding: '6px', backgroundColor: '#3e41a8', color: '#ffffff', border: 'none', borderRadius: '2px', marginRight: '10px' }} 
+                            style={{ width: '30px', padding: '6px', backgroundColor: '#3e41a8', color: '#ffffff', border: 'none', borderRadius: '2px', marginRight: '10px' }} 
                         />
                         <input 
                             type="number" 
                             value={config[key].pitch} 
                             onChange={(e) => updateBinding(key, { ...config[key], pitch: parseInt(e.target.value) })} 
-                            style={{ width: '50px', padding: '6px', backgroundColor: '#3e41a8', color: '#ffffff', border: 'none', borderRadius: '2px', marginRight: '10px' }} 
+                            style={{ width: '30px', padding: '6px', backgroundColor: '#3e41a8', color: '#ffffff', border: 'none', borderRadius: '2px', marginRight: '10px' }} 
                         />
+                        <label style={{ display: 'flex', alignItems: 'center', marginLeft: '5px', justifyContent: 'center' }}>
+                            <input 
+                                type="checkbox" 
+                                checked={config[key].importInMiddle || false} 
+                                onChange={(e) => updateBinding(key, { ...config[key], importInMiddle: e.target.checked })} 
+                                style={{ marginRight: '0px' }} 
+                            />
+                        </label>
                     </div>
-                ))}
-            </div>
-            <div id="debug-log" style={{ backgroundColor: '#333', color: '#fff', padding: '10px', marginTop: '20px', maxHeight: '200px', overflowY: 'scroll' }}>
-                <h2>Debug Log</h2>
-                {debugLog.map((log, index) => (
-                    <div key={index}>{log}</div>
                 ))}
             </div>
         </div>
     );
+    
+    
+    
 };
 
 console.log('Exporting Main component');
