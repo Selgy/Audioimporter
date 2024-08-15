@@ -26,6 +26,8 @@ dependencies = [
  "futures-util",
  "lazy_static",
  "rdev",
+ "serde",
+ "serde_json",
  "tokio",
  "tokio-stream",
  "tokio-tungstenite 0.17.2",

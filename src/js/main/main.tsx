@@ -29,21 +29,14 @@ const Main: React.FC = () => {
     useEffect(() => {
         console.log('useEffect hook is running');
         startWebSocketConnection();
-        loadConfig(); // Load config on mount
-    
-        isListeningForKeyRef.current = isListeningForKey; // Initialize ref with current state
-    
+        
         return () => {
             if (socketRef.current) {
                 socketRef.current.close();
             }
         };
     }, []);
-
-    useEffect(() => {
-        isListeningForKeyRef.current = isListeningForKey; // Sync ref with state whenever it changes
-    }, [isListeningForKey]);
-
+    
     const startWebSocketConnection = useCallback(() => {
         if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
             appendToDebugLog("WebSocket already connected");
@@ -55,32 +48,19 @@ const Main: React.FC = () => {
     
         socketRef.current.onopen = () => {
             appendToDebugLog("Connected to Rust server");
+            loadConfig(); // Load config after connection is established
         };
-    
+        
         socketRef.current.onmessage = (event) => {
             const data = event.data;
             appendToDebugLog(`Received message: ${data}`);
-        
-            if (typeof data === 'string' && data.startsWith("COMBO:")) {
-                const combo = data.split(":")[1];
-                const sortedCombo = combo.split('+').sort().join('+');
-                appendToDebugLog(`Processed combo: ${sortedCombo}`);
-        
-                // Check if we are in the key listening mode
-                if (isListeningForKeyRef.current) {
-                    addNewKeyBind(sortedCombo);  // Add the key bind
-                    stopListening();  // Stop listening after registering the keybind
-                }
-        
-                // Check if the combo exists in the config and execute the script if it does
-                const binding = config[sortedCombo];
-                if (binding) {
-                    //alert(`Triggering executePremiereProScript for combo: ${sortedCombo}`);
-                    executePremiereProScript(binding.path, parseInt(binding.track.replace('A', '')));
-                }
+            
+            if (typeof data === 'string' && data.startsWith("CONFIG:")) {
+                const configData = JSON.parse(data.replace("CONFIG:", ""));
+                setConfig(configData);
+                appendToDebugLog('Config loaded successfully from server');
             }
         };
-        
     
         socketRef.current.onerror = (error: Event) => {
             if (error instanceof ErrorEvent) {
@@ -94,6 +74,8 @@ const Main: React.FC = () => {
             appendToDebugLog(`Disconnected from Rust server: ${event.reason}`);
         };
     }, []);
+    
+    
 
     const appendToDebugLog = (message: string) => {
         console.log('Debug log:', message);
@@ -103,10 +85,7 @@ const Main: React.FC = () => {
     const loadConfig = () => {
         console.log('Loading config');
         try {
-            const storedConfig = JSON.parse(localStorage.getItem('config') || '{}') as Config;
-            setConfig(storedConfig);
-            appendToDebugLog('Config loaded successfully');
-            console.log('Loaded config:', storedConfig);
+            socketRef.current?.send('LOAD_CONFIG');
         } catch (error: unknown) {
             if (error instanceof Error) {
                 appendToDebugLog(`Error loading config: ${error.message}`);
@@ -119,10 +98,10 @@ const Main: React.FC = () => {
 
     const saveConfig = (newConfig: Config) => {
         try {
-            appendToDebugLog(`Saving config: ${JSON.stringify(newConfig)}`);
-            localStorage.setItem('config', JSON.stringify(newConfig));
-            appendToDebugLog('Config saved successfully');
-            setConfig(newConfig); // This should be after saving config to ensure UI updates
+            appendToDebugLog(`Sending config to server: ${JSON.stringify(newConfig)}`);
+            socketRef.current?.send(`SAVE_CONFIG:${JSON.stringify(newConfig)}`);
+            appendToDebugLog('Config sent successfully');
+            setConfig(newConfig); // Update the UI
         } catch (error: unknown) {
             if (error instanceof Error) {
                 appendToDebugLog(`Error saving config: ${error.message}`);
@@ -132,42 +111,98 @@ const Main: React.FC = () => {
         }
     };
 
-    const startKeyListener = useCallback(() => {
-        if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-            setIsListeningForKey(true);
-            appendToDebugLog("Started key listener. isListeningForKey set to true");
-        } else {
-            appendToDebugLog("WebSocket connection is not open.");
-        }
-    }, []);
 
+    
+    
     const stopListening = () => {
-        appendToDebugLog("Stopping listening for key. isListeningForKey set to false");
+        appendToDebugLog("Stopping key listener...");
         setIsListeningForKey(false);
+        isListeningForKeyRef.current = false;
+        appendToDebugLog("isListeningForKey set to false");
         setIsAddingBinding(false);
+        appendToDebugLog("isAddingBinding set to false");
     };
-
-    const addNewKeyBind = (keyCombination: string) => {
-        appendToDebugLog(`Adding new key bind: ${keyCombination}`);
+    
+    const addNewKeyBind = useCallback((keyCombination: string) => {
+        appendToDebugLog(`Detected key combination: ${keyCombination}`);
         const sortedCombination = keyCombination.split('+').sort().join('+');
+        appendToDebugLog(`Sorted key combination: ${sortedCombination}`);
+    
         setConfig((prevConfig) => {
-            appendToDebugLog(`Previous config: ${JSON.stringify(prevConfig)}`);
+            appendToDebugLog(`Current config: ${JSON.stringify(prevConfig)}`);
             if (!prevConfig[sortedCombination]) {
                 const newConfig = {
                     ...prevConfig,
                     [sortedCombination]: { volume: 0, pitch: 0, track: 'A1', path: '' }
                 };
-                appendToDebugLog(`New config before save: ${JSON.stringify(newConfig)}`);
+                appendToDebugLog(`New config before saving: ${JSON.stringify(newConfig)}`);
                 saveConfig(newConfig);
-                appendToDebugLog(`Key binding ${sortedCombination} added successfully`);
+                appendToDebugLog(`Key binding ${sortedCombination} added to config.`);
+                stopListening(); // Stop listening after a keybind is successfully added
+                // Clear the WebSocket message handler for combo
+                if (socketRef.current) {
+                    socketRef.current.onmessage = (event) => {
+                        const data = event.data;
+                        appendToDebugLog(`Received message: ${data}`);
+                        
+                        if (typeof data === 'string' && data.startsWith("CONFIG:")) {
+                            const configData = JSON.parse(data.replace("CONFIG:", ""));
+                            setConfig(configData);
+                            appendToDebugLog('Config loaded successfully from server');
+                        }
+                    };
+                }
                 return newConfig;
             } else {
-                appendToDebugLog(`Key combination already exists: ${sortedCombination}`);
+                appendToDebugLog(`Key combination ${sortedCombination} already exists in config.`);
+                stopListening(); // Stop listening if the keybind already exists
                 return prevConfig;
             }
         });
-    };
+    }, [stopListening]);
+    
 
+    const startKeyListener = useCallback(() => {
+        if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+            appendToDebugLog("WebSocket connection is open. Starting key listener...");
+            setIsListeningForKey(true);
+            isListeningForKeyRef.current = true;
+            appendToDebugLog("isListeningForKey set to true");
+    
+            // Add the WebSocket onmessage handler for COMBO here
+            socketRef.current.onmessage = (event) => {
+                const data = event.data;
+                appendToDebugLog(`Received message: ${data}`);
+                
+                if (typeof data === 'string' && data.startsWith("COMBO:")) {
+                    const combo = data.replace("COMBO:", "");
+                    appendToDebugLog(`Processed combo: ${combo}`);
+                    addNewKeyBind(combo); // Process the received combo
+                }
+            };
+        } else {
+            appendToDebugLog("WebSocket connection is not open. Cannot start key listener.");
+        }
+    }, [addNewKeyBind]);
+
+
+    useEffect(() => {
+        if (socketRef.current) {
+            socketRef.current.onmessage = (event) => {
+                const data = event.data;
+                appendToDebugLog(`Received message: ${data}`);
+                
+                if (typeof data === 'string' && data.startsWith("CONFIG:")) {
+                    const configData = JSON.parse(data.replace("CONFIG:", ""));
+                    setConfig(configData);
+                    appendToDebugLog('Config loaded successfully from server');
+                }
+            };
+        }
+    }, []);
+    
+    
+    
     const addBinding = () => {
         if (!isListeningForKey) {
             setIsAddingBinding(true);
@@ -211,51 +246,27 @@ const Main: React.FC = () => {
 
 
     const executePremiereProScript = (filePath: string, track: number) => {
-        // Ensure filePath is defined and track is a valid number
         if (!filePath || isNaN(track)) {
             alert("Invalid file path or track number.");
             return;
         }
     
-        // Define the ExtendScript function dynamically
         const script = `
             function importAudioToTrack(filePath, trackIndex) {
-                // Ensure the Project panel is active
                 app.project.rootItem;
-    
-                // Get the active sequence directly
                 var activeSequence = app.project.activeSequence;
-    
-    
-                // Import the audio file
                 var importResult = app.project.importFiles([filePath], 1, app.project.rootItem, false);
-    
-                // Attempt to retrieve the imported item from the project items
                 var importedItem = app.project.rootItem.children[app.project.rootItem.children.numItems - 1];
-    
-    
-                // Get the specified audio track
                 var audioTrack = activeSequence.audioTracks[trackIndex - 1];
-
-                // Get the current playhead position
                 var time = activeSequence.getPlayerPosition();
-    
-                // Place the imported item on the audio track at the current playhead position
-                var newClip = audioTrack.insertClip(importedItem, time.seconds); // Insert clip at the current time
-    
-
+                var newClip = audioTrack.insertClip(importedItem, time.seconds);
             }
-    
-            // Call the function with the provided file path and track index
             importAudioToTrack("${filePath.replace(/\\/g, '\\\\')}", ${track});
         `;
     
-        // Execute the ExtendScript function in Premiere Pro
         window.__adobe_cep__.evalScript(script, (result: string) => {
         });
     };
-    
-    
     
     const deleteBinding = (key: string) => {
         setConfig((prevConfig: Config) => {
@@ -292,7 +303,6 @@ const Main: React.FC = () => {
                 >
                     {isListeningForKey ? 'Listening...' : 'Add Binding'}
                 </button>
-                <button onClick={() => console.log('Open Dev Tools clicked')} style={{ width: '150px', padding: '6px', backgroundColor: '#4e52ff', color: '#ffffff', borderRadius: '2px', border: 'none' }}>Open Dev Tools</button>
             </div>
             <input type="file" ref={fileInputRef} style={{ display: 'none' }} accept="audio/*" />
             <div>
