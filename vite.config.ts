@@ -45,9 +45,21 @@ if (action) {
   process.exit();
 }
 
-// https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react(), cep(config)],
+  plugins: [
+    react(),
+    cep(config),
+    {
+      name: 'exclude-csinterface',
+      enforce: 'pre',
+      transform(code, id) {
+        if (id.includes('CSInterface.js')) {
+          return null; // Skip processing for CSInterface.js
+        }
+        return code;
+      }
+    }
+  ],
   resolve: {
     alias: [
       { find: "@esTypes", replacement: path.resolve(__dirname, "src") },

@@ -15,6 +15,13 @@ declare global {
     }
 }
 
+
+if (window.__adobe_cep__) {
+    const script = document.createElement('script');
+    script.src = './CSInterface.js';
+    document.head.appendChild(script);
+  }
+
 const Main: React.FC = () => {
     console.log('Main component is rendering');
 

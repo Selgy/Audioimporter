@@ -39,8 +39,8 @@ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
         <Menu>Audio Importer</Menu>
         <Geometry>
           <Size>
-            <Width>700</Width>
-            <Height>600</Height>
+            <Width>600</Width>
+            <Height>650</Height>
           </Size>
         </Geometry>
         <Icons>
