@@ -14,6 +14,7 @@ declare global {
     }
 }
 
+
 const Main: React.FC = () => {
     console.log('Main component is rendering');
 
@@ -72,6 +73,7 @@ const Main: React.FC = () => {
         };
     }, []);
     
+
     const appendToDebugLog = (message: string) => {
         console.log('Debug log:', message);
         setDebugLog(prevLog => [...prevLog, message]);
@@ -106,6 +108,9 @@ const Main: React.FC = () => {
         }
     };
 
+
+    
+    
     const stopListening = () => {
         appendToDebugLog("Stopping key listener...");
         setIsListeningForKey(false);
@@ -153,6 +158,7 @@ const Main: React.FC = () => {
         });
     }, [stopListening]);
     
+
     const startKeyListener = useCallback(() => {
         if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
             appendToDebugLog("WebSocket connection is open. Starting key listener...");
@@ -175,6 +181,7 @@ const Main: React.FC = () => {
             appendToDebugLog("WebSocket connection is not open. Cannot start key listener.");
         }
     }, [addNewKeyBind]);
+
 
     useEffect(() => {
         if (socketRef.current) {
@@ -200,19 +207,14 @@ const Main: React.FC = () => {
     const handleCombo = (combo: string) => {
         appendToDebugLog(`Handling combo: ${combo}`);
         
+        // Normalize the combo by sorting the keys
         const normalizedCombo = combo.split('+').sort().join('+');
         appendToDebugLog(`Normalized combo: ${normalizedCombo}`);
         
         if (config[normalizedCombo]) {
             const binding = config[normalizedCombo];
             if (binding.path) {
-                if (window.electron && window.electron.ipcRenderer) {
-                    // Send IPC message to background process
-                    window.electron.ipcRenderer.send('import-audio', { filePath: binding.path, track: parseInt(binding.track.replace('A', ''), 10) });
-                } else {
-                    appendToDebugLog('Electron IPC Renderer is not available.');
-                    console.error('Electron IPC Renderer is not available.');
-                }
+                executePremiereProScript(binding.path, parseInt(binding.track.replace('A', ''), 10));
             } else {
                 appendToDebugLog(`No path specified for combo: ${normalizedCombo}`);
             }
@@ -221,7 +223,9 @@ const Main: React.FC = () => {
         }
     };
     
-
+    
+    
+    
     const addBinding = () => {
         if (!isListeningForKey) {
             setIsAddingBinding(true);
@@ -253,6 +257,8 @@ const Main: React.FC = () => {
         }
     };
 
+    
+
     const updateBinding = (key: string, value: AudioBinding) => {
         setConfig((prevConfig: Config) => {
             const newConfig = { ...prevConfig, [key]: value };
@@ -263,6 +269,30 @@ const Main: React.FC = () => {
         });
     };
 
+
+    const executePremiereProScript = (filePath: string, track: number) => {
+        if (!filePath || isNaN(track)) {
+            alert("Invalid file path or track number.");
+            return;
+        }
+    
+        const script = `
+            function importAudioToTrack(filePath, trackIndex) {
+                app.project.rootItem;
+                var activeSequence = app.project.activeSequence;
+                var importResult = app.project.importFiles([filePath], 1, app.project.rootItem, false);
+                var importedItem = app.project.rootItem.children[app.project.rootItem.children.numItems - 1];
+                var audioTrack = activeSequence.audioTracks[trackIndex - 1];
+                var time = activeSequence.getPlayerPosition();
+                var newClip = audioTrack.insertClip(importedItem, time.seconds);
+            }
+            importAudioToTrack("${filePath.replace(/\\/g, '\\\\')}", ${track});
+        `;
+    
+        window.__adobe_cep__.evalScript(script, (result: string) => {
+        });
+    };
+    
     const deleteBinding = (key: string) => {
         setConfig((prevConfig: Config) => {
             const { [key]: _, ...newConfig } = prevConfig;
@@ -273,6 +303,7 @@ const Main: React.FC = () => {
         });
     };
 
+    
     const formatKeyCombination = (keyCombination: string): string => {
         const keyMap: { [key: string]: string } = {
             'LAlt': 'Alt',
@@ -291,8 +322,9 @@ const Main: React.FC = () => {
             'Numpad8': '8',
             'Numpad9': '9',
             'Numpad0': '0',
+            // Add more key mappings as needed
         };
-
+    
         const priority = ['Ctrl', 'Shift', 'Alt'];
 
         const sortedKeys = keyCombination
@@ -301,19 +333,20 @@ const Main: React.FC = () => {
             .sort((a, b) => {
                 const aIndex = priority.indexOf(a);
                 const bIndex = priority.indexOf(b);
-
+    
                 if (aIndex === -1 && bIndex === -1) return a.localeCompare(b);
                 if (aIndex === -1) return 1;
                 if (bIndex === -1) return -1;
                 return aIndex - bIndex;
             });
-
+    
         return sortedKeys.join('+');
     };
-
+    
     const extractFileName = (filePath: string): string => {
         return filePath.split('\\').pop()?.split('/').pop() || ''; // Handles both Windows and Unix-style paths
     };
+    
 
     return (
         <div style={{ fontFamily: 'Roboto, sans-serif', backgroundColor: '#1e2057', color: '#ffffff', padding: '10px' }}>
@@ -422,6 +455,8 @@ const Main: React.FC = () => {
             </div>
         </div>
     );
+    
+    
 };
 
 console.log('Exporting Main component');

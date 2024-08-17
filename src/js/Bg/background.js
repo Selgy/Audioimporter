@@ -1,7 +1,6 @@
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
-const { ipcMain } = require('electron');
 
 function startRustServer() {
     console.log("Starting Rust server...");
@@ -43,32 +42,4 @@ function startRustServer() {
 console.log("Background script loaded. Starting Rust server...");
 startRustServer();
 
-ipcMain.on('import-audio', (event, { filePath, track }) => {
-    console.log(`Importing audio: ${filePath} to track: ${track}`);
-    executePremiereProScript(filePath, track);
-});
-function executePremiereProScript(filePath, track) {
-    if (!filePath || isNaN(track)) {
-        console.error("Invalid file path or track number.");
-        return;
-    }
-
-    const script = `
-        function importAudioToTrack(filePath, trackIndex) {
-            app.project.rootItem;
-            var activeSequence = app.project.activeSequence;
-            var importResult = app.project.importFiles([filePath], 1, app.project.rootItem, false);
-            var importedItem = app.project.rootItem.children[app.project.rootItem.children.numItems - 1];
-            var audioTrack = activeSequence.audioTracks[trackIndex - 1];
-            var time = activeSequence.getPlayerPosition();
-            var newClip = audioTrack.insertClip(importedItem, time.seconds);
-        }
-        importAudioToTrack("${filePath.replace(/\\/g, '\\\\')}", ${track});
-    `;
-
-    window.__adobe_cep__.evalScript(script, (result) => {
-        console.log(`Script executed with result: ${result}`);
-    });
-}
-
-console.log("Background script loaded and listening for import-audio events.");
+// Add any other background tasks or message listeners here
