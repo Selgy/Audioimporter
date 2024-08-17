@@ -19,6 +19,6 @@
       "@esTypes/*": ["./src/jsx"]
     }
   },
-  "include": ["./src", "preload.js", "main.js"],
+  "include": ["./src"],
   "exclude": ["./src/jsx"]
 }

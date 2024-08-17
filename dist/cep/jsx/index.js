@@ -2,8 +2,8 @@
 
 var config = {
   version: version,
-  id: "com.AudioImporter.cep",
-  displayName: "Audio Importer",
+  id: "com.AudioImporterV2.cep",
+  displayName: "Audio Importer V2",
   symlink: "local",
   port: 3000,
   servePort: 5000,
@@ -25,8 +25,8 @@ var config = {
   panels: [{
     mainPath: "./main/index.html",
     name: "main",
-    panelDisplayName: "Audio Importer",
-    autoVisible: false,
+    panelDisplayName: "Audio Importer V2",
+    autoVisible: true,
     width: 600,
     height: 650
   }, {

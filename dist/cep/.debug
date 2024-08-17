@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ExtensionList>
-  <Extension Id="com.AudioImporter.cep.main">
+  <Extension Id="com.AudioImporterV2.cep.main">
     <HostList>
       <Host Name="PPRO" Port="8860"/>
     </HostList>
   </Extension>
-  <Extension Id="com.AudioImporter.cep.background">
+  <Extension Id="com.AudioImporterV2.cep.background">
     <HostList>
       <Host Name="PPRO" Port="8861"/>
     </HostList>

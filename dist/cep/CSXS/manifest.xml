@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <ExtensionManifest
 Version="6.0"
-ExtensionBundleId="com.AudioImporter.cep"
+ExtensionBundleId="com.AudioImporterV2.cep"
 ExtensionBundleVersion="0.0.1"
-ExtensionBundleName="Audio Importer"
+ExtensionBundleName="Audio Importer V2"
 xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 >
 <ExtensionList>
-  <Extension Id="com.AudioImporter.cep.main" Version="0.0.1" />
-  <Extension Id="com.AudioImporter.cep.background" Version="0.0.1" />
+  <Extension Id="com.AudioImporterV2.cep.main" Version="0.0.1" />
+  <Extension Id="com.AudioImporterV2.cep.background" Version="0.0.1" />
 </ExtensionList>
 <ExecutionEnvironment>
   <HostList>
@@ -22,7 +22,7 @@ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   </RequiredRuntimeList>
 </ExecutionEnvironment>
 <DispatchInfoList>
-  <Extension Id="com.AudioImporter.cep.main">
+  <Extension Id="com.AudioImporterV2.cep.main">
     <DispatchInfo>
       <Resources>
         <MainPath>./main/index.html</MainPath>
@@ -33,11 +33,11 @@ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
         </CEFCommandLine>
       </Resources>
       <Lifecycle>
-        <AutoVisible>false</AutoVisible>
+        <AutoVisible>true</AutoVisible>
       </Lifecycle>
       <UI>
         <Type>Panel</Type>
-        <Menu>Audio Importer</Menu>
+        <Menu>Audio Importer V2</Menu>
         <Geometry>
           <Size>
             <Width>600</Width>
@@ -53,7 +53,7 @@ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
       </UI>
     </DispatchInfo>
   </Extension>
-  <Extension Id="com.AudioImporter.cep.background">
+  <Extension Id="com.AudioImporterV2.cep.background">
     <DispatchInfo>
       <Resources>
         <MainPath>./Bg/background.html</MainPath>

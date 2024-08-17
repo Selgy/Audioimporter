@@ -1,10 +1,11 @@
 import { CEP_Config } from "vite-cep-plugin";
 import { version } from "./package.json";
 
+
 const config: CEP_Config = {
   version,
-  id: "com.AudioImporter.cep",
-  displayName: "Audio Importer",
+  id: "com.AudioImporterV2.cep",
+  displayName: "Audio Importer V2",
   symlink: "local",
   port: 3000,
   servePort: 5000,
@@ -27,8 +28,8 @@ const config: CEP_Config = {
     {
       mainPath: "./main/index.html",
       name: "main",
-      panelDisplayName: "Audio Importer",
-      autoVisible: false,
+      panelDisplayName: "Audio Importer V2",
+      autoVisible: true,
       width: 600,
       height: 650,
     },
@@ -42,12 +43,10 @@ const config: CEP_Config = {
       height: 1,
     }
   ],
-
   build: {
-    jsxBin: "off", 
+    jsxBin: "off",
     sourceMap: true,
   },
-
   zxp: {
     country: "US",
     province: "CA",
@@ -57,14 +56,11 @@ const config: CEP_Config = {
     sourceMap: false,
     jsxBin: "off",
   },
-
   installModules: [],
-
   copyAssets: [
     "./target/release/audio_importer.exe", 
   ],
 
   copyZipAssets: [],
 };
-
 export default config;

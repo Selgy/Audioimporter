@@ -1,9 +1,14 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
+import { initBolt } from "../lib/utils/bolt";
+
+
 import Main from "./main";
 
-console.log("Rendering Main component...");
+initBolt();
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
-  <Main />
+  <React.StrictMode>
+    <Main />
+  </React.StrictMode>
 );

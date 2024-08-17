@@ -1,5 +1,6 @@
 import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react"; // BOLT-CEP_REACT-ONLY
+import react from "@vitejs/plugin-react";
+
 import { cep, runAction } from "vite-cep-plugin";
 import cepConfig from "./cep.config";
 import path from "path";
@@ -47,10 +48,7 @@ if (action) {
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [
-    react(), // BOLT-CEP_REACT-ONLY
-    cep(config),
-  ],
+  plugins: [react(), cep(config)],
   resolve: {
     alias: [{ find: "@esTypes", replacement: path.resolve(__dirname, "src") }],
   },
@@ -68,11 +66,16 @@ export default defineConfig({
     watch: {
       include: "src/jsx/**",
     },
+    // commonjsOptions: {
+    //   transformMixedEsModules: true,
+    // },
     rollupOptions: {
       input,
       output: {
-        format: "es", // Use 'es' format for better compatibility with modern features
+        manualChunks: {},
+        // esModule: false,
         preserveModules: false,
+        format: "cjs",
       },
     },
     target: "chrome74",
@@ -80,7 +83,7 @@ export default defineConfig({
   },
 });
 
-// Rollup ES3 build
+// rollup es3 build
 const outPathExtendscript = path.join("dist", "cep", "jsx", "index.js");
 extendscriptConfig(
   `src/jsx/index.ts`,
