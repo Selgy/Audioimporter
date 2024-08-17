@@ -8,6 +8,7 @@ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 >
 <ExtensionList>
   <Extension Id="com.AudioImporter.cep.main" Version="0.0.1" />
+  <Extension Id="com.AudioImporter.cep.background" Version="0.0.1" />
 </ExtensionList>
 <ExecutionEnvironment>
   <HostList>
@@ -32,7 +33,7 @@ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
         </CEFCommandLine>
       </Resources>
       <Lifecycle>
-        <AutoVisible>true</AutoVisible>
+        <AutoVisible>false</AutoVisible>
       </Lifecycle>
       <UI>
         <Type>Panel</Type>
@@ -41,6 +42,41 @@ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
           <Size>
             <Width>600</Width>
             <Height>650</Height>
+          </Size>
+        </Geometry>
+        <Icons>
+          <Icon Type="Normal">./src/assets/dark-icon.png</Icon>
+          <Icon Type="DarkNormal">./src/assets/light-icon.png</Icon>
+          <Icon Type="RollOver">./src/assets/dark-icon.png</Icon>
+          <Icon Type="DarkRollOver">./src/assets/light-icon.png</Icon>
+        </Icons>
+      </UI>
+    </DispatchInfo>
+  </Extension>
+  <Extension Id="com.AudioImporter.cep.background">
+    <DispatchInfo>
+      <Resources>
+        <MainPath>./Bg/background.html</MainPath>
+        <CEFCommandLine>
+          <Parameter>--v=0</Parameter>
+          <Parameter>--enable-nodejs</Parameter>
+          <Parameter>--mixed-context</Parameter>
+        </CEFCommandLine>
+      </Resources>
+      <Lifecycle>
+        <AutoVisible>false</AutoVisible>
+        <StartOn>
+          <Event>com.adobe.csxs.events.ApplicationInitialized</Event>
+          <Event>applicationActive</Event>
+        </StartOn>
+      </Lifecycle>
+      <UI>
+        <Type>Custom</Type>
+        
+        <Geometry>
+          <Size>
+            <Width>1</Width>
+            <Height>1</Height>
           </Size>
         </Geometry>
         <Icons>

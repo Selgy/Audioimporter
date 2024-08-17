@@ -13,10 +13,11 @@
     "delsymlink": "cross-env ACTION=delsymlink vite"
   },
   "dependencies": {
-    "electron": "^31.2.1",
+    "electron": "^31.4.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "reconnecting-websocket": "^4.4.0"
+    "reconnecting-websocket": "^4.4.0",
+    "ws": "^8.18.0"
   },
   "devDependencies": {
     "@babel/core": "^7.19.0",

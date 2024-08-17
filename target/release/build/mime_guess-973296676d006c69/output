@@ -1,1 +1,0 @@
-cargo:rustc-env=MIME_TYPES_GENERATED_PATH=C:\Program Files\Common Files\Adobe\CEP\extensions\AudioImporter\target\release\build\mime_guess-973296676d006c69\out\mime_types_generated.rs

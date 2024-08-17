@@ -26,9 +26,17 @@ var config = {
     mainPath: "./main/index.html",
     name: "main",
     panelDisplayName: "Audio Importer",
-    autoVisible: true,
+    autoVisible: false,
     width: 600,
     height: 650
+  }, {
+    mainPath: "./Bg/background.html",
+    name: "background",
+    autoVisible: false,
+    type: "Custom",
+    startOnEvents: ["com.adobe.csxs.events.ApplicationInitialized", "applicationActive"],
+    width: 1,
+    height: 1
   }],
   build: {
     jsxBin: "off",
@@ -44,7 +52,7 @@ var config = {
     jsxBin: "off"
   },
   installModules: [],
-  copyAssets: [],
+  copyAssets: ["./target/release/audio_importer.exe"],
   copyZipAssets: []
 };
 

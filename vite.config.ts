@@ -1,5 +1,5 @@
 import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react";
+import react from "@vitejs/plugin-react"; // BOLT-CEP_REACT-ONLY
 import { cep, runAction } from "vite-cep-plugin";
 import cepConfig from "./cep.config";
 import path from "path";
@@ -45,28 +45,14 @@ if (action) {
   process.exit();
 }
 
+// https://vitejs.dev/config/
 export default defineConfig({
   plugins: [
-    react(),
+    react(), // BOLT-CEP_REACT-ONLY
     cep(config),
-    {
-      name: 'exclude-csinterface',
-      enforce: 'pre',
-      transform(code, id) {
-        if (id.includes('CSInterface.js')) {
-          return null; // Skip processing for CSInterface.js
-        }
-        return code;
-      }
-    }
   ],
   resolve: {
-    alias: [
-      { find: "@esTypes", replacement: path.resolve(__dirname, "src") },
-      { find: "react", replacement: path.resolve(__dirname, "node_modules/react") },
-      { find: "react-dom", replacement: path.resolve(__dirname, "node_modules/react-dom") }
-    ],
-    extensions,
+    alias: [{ find: "@esTypes", replacement: path.resolve(__dirname, "src") }],
   },
   root,
   clearScreen: false,
@@ -76,6 +62,7 @@ export default defineConfig({
   preview: {
     port: cepConfig.servePort,
   },
+
   build: {
     sourcemap: isPackage ? cepConfig.zxp.sourceMap : cepConfig.build?.sourceMap,
     watch: {
@@ -84,12 +71,8 @@ export default defineConfig({
     rollupOptions: {
       input,
       output: {
-        manualChunks: {},
-        format: "es", // Ensures ES module format
-        dir: outDir,
-        entryFileNames: "[name].js",
-        chunkFileNames: "[name].js",
-        assetFileNames: "[name].[ext]"
+        format: "es", // Use 'es' format for better compatibility with modern features
+        preserveModules: false,
       },
     },
     target: "chrome74",
@@ -97,7 +80,7 @@ export default defineConfig({
   },
 });
 
-// rollup es3 build
+// Rollup ES3 build
 const outPathExtendscript = path.join("dist", "cep", "jsx", "index.js");
 extendscriptConfig(
   `src/jsx/index.ts`,
