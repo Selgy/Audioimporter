@@ -8,7 +8,7 @@ function startRustServer() {
         console.log("Node.js environment detected. Node version:", process.version);
 
         // Use the specific path provided
-        const rustExecutablePath = 'E:\\AudioImporter\\src\\target\\release\\audio_importer.exe';
+        const rustExecutablePath = 'E:\\DEV\\AudioImporter\\src\\target\\release\\audio_importer.exe';
         console.log('Rust executable path:', rustExecutablePath);
 
         // Check if the file exists

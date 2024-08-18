@@ -7,7 +7,7 @@ var config = {
   symlink: "local",
   port: 3000,
   servePort: 5000,
-  startingDebugPort: 8860,
+  startingDebugPort: 8850,
   extensionManifestVersion: 6.0,
   requiredRuntimeVersion: 9.0,
   hosts: [{
@@ -27,15 +27,14 @@ var config = {
     name: "main",
     panelDisplayName: "Audio Importer V2",
     autoVisible: true,
-    width: 600,
+    width: 690,
     height: 650
   }, {
-    mainPath: "./Bg/background.html",
-    name: "background",
+    mainPath: "./settings/index.html",
+    name: "settings",
     autoVisible: false,
     type: "Custom",
     startOnEvents: ["com.adobe.csxs.events.ApplicationInitialized", "applicationActive"],
-    width: 1,
     height: 1
   }],
   build: {

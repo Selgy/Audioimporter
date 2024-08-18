@@ -23,7 +23,7 @@ async fn main() {
 
 fn get_config_path() -> PathBuf {
     let appdata_dir = env::var("APPDATA").expect("Failed to get APPDATA environment variable");
-    let config_path = PathBuf::from(appdata_dir).join("MyApp").join("config.json");
+    let config_path = PathBuf::from(appdata_dir).join("AudioImporter").join("config.json");
 
     // Ensure the directory exists
     fs::create_dir_all(config_path.parent().unwrap()).expect("Failed to create config directory");

@@ -182,6 +182,7 @@ const Main: React.FC = () => {
         }
     }, [addNewKeyBind]);
 
+    
 
     useEffect(() => {
         if (socketRef.current) {

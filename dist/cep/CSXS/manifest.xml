@@ -8,7 +8,7 @@ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 >
 <ExtensionList>
   <Extension Id="com.AudioImporterV2.cep.main" Version="0.0.1" />
-  <Extension Id="com.AudioImporterV2.cep.background" Version="0.0.1" />
+  <Extension Id="com.AudioImporterV2.cep.settings" Version="0.0.1" />
 </ExtensionList>
 <ExecutionEnvironment>
   <HostList>
@@ -40,7 +40,7 @@ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
         <Menu>Audio Importer V2</Menu>
         <Geometry>
           <Size>
-            <Width>600</Width>
+            <Width>690</Width>
             <Height>650</Height>
           </Size>
         </Geometry>
@@ -53,10 +53,10 @@ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
       </UI>
     </DispatchInfo>
   </Extension>
-  <Extension Id="com.AudioImporterV2.cep.background">
+  <Extension Id="com.AudioImporterV2.cep.settings">
     <DispatchInfo>
       <Resources>
-        <MainPath>./Bg/background.html</MainPath>
+        <MainPath>./settings/index.html</MainPath>
         <CEFCommandLine>
           <Parameter>--v=0</Parameter>
           <Parameter>--enable-nodejs</Parameter>
@@ -75,7 +75,7 @@ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
         
         <Geometry>
           <Size>
-            <Width>1</Width>
+            <Width>500</Width>
             <Height>1</Height>
           </Size>
         </Geometry>

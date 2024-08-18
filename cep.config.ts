@@ -9,7 +9,7 @@ const config: CEP_Config = {
   symlink: "local",
   port: 3000,
   servePort: 5000,
-  startingDebugPort: 8860,
+  startingDebugPort: 8850,
   extensionManifestVersion: 6.0,
   requiredRuntimeVersion: 9.0,
   hosts: [
@@ -30,17 +30,16 @@ const config: CEP_Config = {
       name: "main",
       panelDisplayName: "Audio Importer V2",
       autoVisible: true,
-      width: 600,
+      width: 690,
       height: 650,
     },
     {
-      mainPath: "./Bg/background.html", 
-      name: "background",
-      autoVisible: false,
-      type: "Custom",
-      startOnEvents: ["com.adobe.csxs.events.ApplicationInitialized", "applicationActive"],
-      width: 1,
-      height: 1,
+      mainPath: "./settings/index.html", 
+      name: "settings", 
+      autoVisible: false, 
+      type: "Custom", 
+      startOnEvents: ["com.adobe.csxs.events.ApplicationInitialized", "applicationActive"], 
+      height: 1, 
     }
   ],
   build: {
