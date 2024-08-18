@@ -1,34 +1,22 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { Config, AudioBinding } from './types';
 
-console.log('main.tsx is being executed');
-
 
 declare global {
     interface Window {
-        electron: {
-            ipcRenderer: {
-                send: (channel: string, data: any) => void;
-                on: (channel: string, func: (...args: any[]) => void) => void;
-                removeListener: (channel: string, func: (...args: any[]) => void) => void;
-            };
-        };
         __adobe_cep__: {
-            evalScript: (script: string, callback?: (result: string) => void) => void;
+            evalScript: (script: string, callback: (result: any) => void) => void;
         };
     }
 }
 
 const Settings: React.FC = () => {
     const socketRef = useRef<WebSocket | null>(null);
-    const configRef = useRef<any>({});
+    const configRef = useRef<Config>({});
     const [config, setConfig] = useState<Config>({});
     const [debugLog, setDebugLog] = useState<string[]>([]);
-    const [isListeningForKey, setIsListeningForKey] = useState(false);
-    const isListeningForKeyRef = useRef(isListeningForKey);
-    const fileInputRef = useRef<HTMLInputElement>(null);
-
     
+
     useEffect(() => {
         console.log('useEffect hook is running');
         startWebSocketConnection();
@@ -40,7 +28,6 @@ const Settings: React.FC = () => {
         };
     }, []);
 
-
     useEffect(() => {
         if (socketRef.current) {
             socketRef.current.onmessage = (event) => {
@@ -51,16 +38,26 @@ const Settings: React.FC = () => {
                     if (data.startsWith("CONFIG:")) {
                         const configData = JSON.parse(data.replace("CONFIG:", ""));
                         setConfig(configData);
+                        configRef.current = configData;
                         appendToDebugLog('Config loaded successfully from server');
+                        appendToDebugLog(`Updated config: ${JSON.stringify(configData, null, 2)}`);
                     } else if (data.startsWith("COMBO:")) {
                         const combo = data.replace("COMBO:", "");
                         appendToDebugLog(`Combo received: ${combo}`);
+                        handleCombo(combo).catch(error => {
+                            appendToDebugLog(`Error in handleCombo: ${error}`);
+                        });
                     }
                 }
             };
         }
-    }, [config]);
-    
+    }, []);
+
+    useEffect(() => {
+        const intervalId = setInterval(reconnectWebSocket, 5000);
+        return () => clearInterval(intervalId);
+    }, []);
+
     const startWebSocketConnection = useCallback(() => {
         console.log("Attempting to establish WebSocket connection...");
         if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
@@ -75,7 +72,7 @@ const Settings: React.FC = () => {
             socketRef.current.onopen = () => {
                 console.log("WebSocket connected to Rust server");
                 appendToDebugLog("Connected to Rust server");
-                loadConfig(); // Load config after connection is established
+                loadConfig();
             };
     
             socketRef.current.onmessage = (event) => {
@@ -92,15 +89,14 @@ const Settings: React.FC = () => {
             socketRef.current.onclose = (event: CloseEvent) => {
                 console.log(`WebSocket closed: ${event.reason}`);
                 appendToDebugLog(`WebSocket closed: ${event.reason}`);
-                setTimeout(startWebSocketConnection, 5000); // Retry connection
+                setTimeout(startWebSocketConnection, 5000);
             };
         } catch (error) {
             console.error("WebSocket connection failed:", error);
             appendToDebugLog("WebSocket connection failed: " + (error as Error).message);
         }
     }, []);
-    
-    
+
     const appendToDebugLog = (message: string) => {
         console.log('Debug log:', message);
         setDebugLog(prevLog => [...prevLog, message]);
@@ -116,7 +112,111 @@ const Settings: React.FC = () => {
     };
 
 
+    const reconnectWebSocket = () => {
+        if (socketRef.current?.readyState === WebSocket.CLOSED) {
+            appendToDebugLog("WebSocket disconnected. Attempting to reconnect...");
+            startWebSocketConnection();
+        }
+    };
 
+    
+    const fetchLatestConfig = (): Promise<Config> => {
+        return new Promise((resolve, reject) => {
+            if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+                const messageHandler = (event: MessageEvent) => {
+                    const data = event.data;
+                    if (typeof data === 'string' && data.startsWith("CONFIG:")) {
+                        const configData = JSON.parse(data.replace("CONFIG:", ""));
+                        socketRef.current?.removeEventListener('message', messageHandler);
+                        configRef.current = configData; // Update the configRef
+                        setConfig(configData); // Update the state
+                        resolve(configData);
+                    }
+                };
+                socketRef.current.addEventListener('message', messageHandler);
+                socketRef.current.send('LOAD_CONFIG');
+            } else {
+                reject(new Error("WebSocket is not connected"));
+            }
+        });
+    };
+
+    const handleCombo = async (combo: string) => {
+        appendToDebugLog(`Handling combo: ${combo}`);
+        
+        try {
+            // Fetch the latest config from the server
+            const latestConfig = await fetchLatestConfig();
+            appendToDebugLog(`Fetched latest config: ${JSON.stringify(latestConfig, null, 2)}`);
+            
+            if (Object.keys(latestConfig).length === 0) {
+                appendToDebugLog(`Config is empty, no bindings to process`);
+                return;
+            }
+    
+            const normalizedCombo = combo.split('+').map(key => key.toLowerCase()).sort().join('+');
+            appendToDebugLog(`Normalized combo: ${normalizedCombo}`);
+        
+            const normalizedConfig: Config = Object.fromEntries(
+                Object.entries(latestConfig).map(([key, value]) => [
+                    key.split('+').map(k => k.toLowerCase()).sort().join('+'),
+                    value
+                ])
+            );
+        
+            appendToDebugLog(`Normalized config: ${JSON.stringify(normalizedConfig, null, 2)}`);
+        
+            if (normalizedConfig[normalizedCombo]) {
+                const binding: AudioBinding = normalizedConfig[normalizedCombo];
+                appendToDebugLog(`Found binding for combo: ${normalizedCombo}`);
+        
+                if (binding.path) {
+                    appendToDebugLog(`Executing script for path: ${binding.path} and track: ${binding.track}`);
+                    executePremiereProScript(binding.path, parseInt(binding.track.replace('A', ''), 10));
+                } else {
+                    appendToDebugLog(`No path specified for combo: ${normalizedCombo}`);
+                }
+            } else {
+                appendToDebugLog(`Combo ${normalizedCombo} not found in config. Skipping execution.`);
+            }
+        } catch (error) {
+            appendToDebugLog(`Error handling combo: ${error}`);
+        }
+    };
+
+
+    const executePremiereProScript = (filePath: string, track: number) => {
+        appendToDebugLog(`Executing Premiere Pro script with file: ${filePath} and track: ${track}`);
+        if (!filePath || isNaN(track)) {
+            appendToDebugLog("Invalid file path or track number.");
+            return;
+        }
+    
+        const script = `
+            function importAudioToTrack(filePath, trackIndex) {
+                app.project.rootItem;
+                var activeSequence = app.project.activeSequence;
+                var importResult = app.project.importFiles([filePath], 1, app.project.rootItem, false);
+                var importedItem = app.project.rootItem.children[app.project.rootItem.children.numItems - 1];
+                var audioTrack = activeSequence.audioTracks[trackIndex - 1];
+                var time = activeSequence.getPlayerPosition();
+                var newClip = audioTrack.insertClip(importedItem, time.seconds);
+                return "Audio imported successfully";
+            }
+            importAudioToTrack("${filePath.replace(/\\/g, '\\\\')}", ${track});
+        `;
+    
+        appendToDebugLog(`Evaluating script: ${script}`);
+        if (window.__adobe_cep__ && window.__adobe_cep__.evalScript) {
+            window.__adobe_cep__.evalScript(script, (result: any) => {
+                appendToDebugLog(`Script execution result: ${result}`);
+            });
+        } else {
+            appendToDebugLog("window.__adobe_cep__.evalScript is not available");
+        }
+    };
+
+    
 
     const sendLogToPanel = (message: string) => {
         if (window.electron && window.electron.ipcRenderer) {

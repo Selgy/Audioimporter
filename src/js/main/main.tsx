@@ -36,6 +36,29 @@ const Main: React.FC = () => {
             }
         };
     }, []);
+
+    useEffect(() => {
+        if (socketRef.current) {
+            socketRef.current.onmessage = (event) => {
+                const data = event.data;
+                appendToDebugLog(`Received message: ${data}`);
+                
+                if (typeof data === 'string') {
+                    if (data.startsWith("CONFIG:")) {
+                        const configData = JSON.parse(data.replace("CONFIG:", ""));
+                        setConfig(configData);
+                        appendToDebugLog('Config loaded successfully from server');
+                    } else if (data.startsWith("COMBO:")) {
+                        const combo = data.replace("COMBO:", "");
+                        appendToDebugLog(`Processed combo: ${combo}`);
+                        handleCombo(combo);
+                    }
+                }
+            };
+        }
+    }, []);
+
+    
     
     const startWebSocketConnection = useCallback(() => {
         if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
@@ -98,7 +121,7 @@ const Main: React.FC = () => {
             appendToDebugLog(`Sending config to server: ${JSON.stringify(newConfig)}`);
             socketRef.current?.send(`SAVE_CONFIG:${JSON.stringify(newConfig)}`);
             appendToDebugLog('Config sent successfully');
-            setConfig(newConfig); // Update the UI
+            setConfig(newConfig); // Update the local state
         } catch (error: unknown) {
             if (error instanceof Error) {
                 appendToDebugLog(`Error saving config: ${error.message}`);
@@ -108,7 +131,16 @@ const Main: React.FC = () => {
         }
     };
 
-
+    const handleCombo = (combo: string) => {
+        const sortedCombo = combo.split('+').sort().join('+');
+        if (config[sortedCombo]) {
+            // Process the combo (e.g., play audio, trigger action)
+            appendToDebugLog(`Processing combo: ${sortedCombo}`);
+            // Add your logic here to handle the combo
+        } else {
+            appendToDebugLog(`Combo ${sortedCombo} not found in config`);
+        }
+    };
     
     
     const stopListening = () => {
@@ -184,46 +216,6 @@ const Main: React.FC = () => {
 
     
 
-    useEffect(() => {
-        if (socketRef.current) {
-            socketRef.current.onmessage = (event) => {
-                const data = event.data;
-                appendToDebugLog(`Received message: ${data}`);
-                
-                if (typeof data === 'string') {
-                    if (data.startsWith("CONFIG:")) {
-                        const configData = JSON.parse(data.replace("CONFIG:", ""));
-                        setConfig(configData);
-                        appendToDebugLog('Config loaded successfully from server');
-                    } else if (data.startsWith("COMBO:")) {
-                        const combo = data.replace("COMBO:", "");
-                        appendToDebugLog(`Combo received: ${combo}`);
-                        handleCombo(combo); // Handle the combo here
-                    }
-                }
-            };
-        }
-    }, [config]);
-
-    const handleCombo = (combo: string) => {
-        appendToDebugLog(`Handling combo: ${combo}`);
-        
-        // Normalize the combo by sorting the keys
-        const normalizedCombo = combo.split('+').sort().join('+');
-        appendToDebugLog(`Normalized combo: ${normalizedCombo}`);
-        
-        if (config[normalizedCombo]) {
-            const binding = config[normalizedCombo];
-            if (binding.path) {
-                executePremiereProScript(binding.path, parseInt(binding.track.replace('A', ''), 10));
-            } else {
-                appendToDebugLog(`No path specified for combo: ${normalizedCombo}`);
-            }
-        } else {
-            appendToDebugLog(`Combo ${normalizedCombo} not found in config.`);
-        }
-    };
-    
     
     
     
@@ -271,28 +263,6 @@ const Main: React.FC = () => {
     };
 
 
-    const executePremiereProScript = (filePath: string, track: number) => {
-        if (!filePath || isNaN(track)) {
-            alert("Invalid file path or track number.");
-            return;
-        }
-    
-        const script = `
-            function importAudioToTrack(filePath, trackIndex) {
-                app.project.rootItem;
-                var activeSequence = app.project.activeSequence;
-                var importResult = app.project.importFiles([filePath], 1, app.project.rootItem, false);
-                var importedItem = app.project.rootItem.children[app.project.rootItem.children.numItems - 1];
-                var audioTrack = activeSequence.audioTracks[trackIndex - 1];
-                var time = activeSequence.getPlayerPosition();
-                var newClip = audioTrack.insertClip(importedItem, time.seconds);
-            }
-            importAudioToTrack("${filePath.replace(/\\/g, '\\\\')}", ${track});
-        `;
-    
-        window.__adobe_cep__.evalScript(script, (result: string) => {
-        });
-    };
     
     const deleteBinding = (key: string) => {
         setConfig((prevConfig: Config) => {
