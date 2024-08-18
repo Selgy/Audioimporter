@@ -119,7 +119,7 @@ const Settings: React.FC = () => {
         }
     };
 
-    
+
     const fetchLatestConfig = (): Promise<Config> => {
         return new Promise((resolve, reject) => {
             if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
@@ -185,39 +185,43 @@ const Settings: React.FC = () => {
     };
 
 
-    const executePremiereProScript = (filePath: string, track: number) => {
+    const executePremiereProScript = (filePath: string, track: number): void => {
         appendToDebugLog(`Executing Premiere Pro script with file: ${filePath} and track: ${track}`);
         if (!filePath || isNaN(track)) {
             appendToDebugLog("Invalid file path or track number.");
             return;
         }
     
+        // Use the correct absolute path to your JSX file
+        const jsxFilePath = 'E:/DEV/AudioImporter/src/jsx/importAudio.jsx';  // Using forward slashes
+    
         const script = `
-            function importAudioToTrack(filePath, trackIndex) {
-                app.project.rootItem;
-                var activeSequence = app.project.activeSequence;
-                var importResult = app.project.importFiles([filePath], 1, app.project.rootItem, false);
-                var importedItem = app.project.rootItem.children[app.project.rootItem.children.numItems - 1];
-                var audioTrack = activeSequence.audioTracks[trackIndex - 1];
-                var time = activeSequence.getPlayerPosition();
-                var newClip = audioTrack.insertClip(importedItem, time.seconds);
-                return "Audio imported successfully";
+            try {
+                $.writeln("Attempting to load file from: " + "${jsxFilePath}");
+                $.evalFile("${jsxFilePath}");
+                var result = importAudioToTrack("${filePath.replace(/\\/g, '\\\\')}", ${track});
+                $.writeln('Success: ' + result);
+                result; // Ensure result is returned
+            } catch(e) {
+                $.writeln('Error: ' + e.toString() + ' | Full path attempted: ' + "${jsxFilePath}");
+                e.toString(); // Return error message
             }
-            importAudioToTrack("${filePath.replace(/\\/g, '\\\\')}", ${track});
         `;
     
         appendToDebugLog(`Evaluating script: ${script}`);
         if (window.__adobe_cep__ && window.__adobe_cep__.evalScript) {
-            window.__adobe_cep__.evalScript(script, (result: any) => {
+            window.__adobe_cep__.evalScript(script, (result: string) => {
                 appendToDebugLog(`Script execution result: ${result}`);
             });
         } else {
             appendToDebugLog("window.__adobe_cep__.evalScript is not available");
         }
     };
-
+    
     
 
+
+    
     const sendLogToPanel = (message: string) => {
         if (window.electron && window.electron.ipcRenderer) {
             window.electron.ipcRenderer.send('background-log', message);
