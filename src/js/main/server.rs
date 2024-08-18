@@ -4,11 +4,14 @@ use futures_util::{SinkExt, StreamExt};
 use device_query::{DeviceQuery, DeviceState, Keycode};
 use std::collections::HashSet;
 use std::sync::Arc;
-use tokio::sync::{Mutex};
+use tokio::sync::{Mutex, broadcast};
 use std::env;
 use std::fs;
 use std::path::PathBuf;
 use serde_json::Value;
+
+type WebSocketTx = futures_util::stream::SplitSink<tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>, Message>;
+type WebSocketRx = futures_util::stream::SplitStream<tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>>;
 
 #[tokio::main]
 async fn main() {
@@ -16,8 +19,115 @@ async fn main() {
     let listener = TcpListener::bind(&addr).await.expect("Can't listen");
     println!("Listening on: {}", addr);
 
+    let config = Arc::new(Mutex::new(load_config()));
+    let (tx, _rx) = broadcast::channel(100);
+
     while let Ok((stream, _)) = listener.accept().await {
-        tokio::spawn(accept_connection(stream));
+        let config_clone = Arc::clone(&config);
+        let tx_clone = tx.clone();
+        tokio::spawn(accept_connection(stream, config_clone, tx_clone));
+    }
+}
+
+async fn accept_connection(stream: TcpStream, config: Arc<Mutex<Value>>, tx: broadcast::Sender<String>) {
+    let addr = stream.peer_addr().expect("Connected streams should have a peer address");
+    println!("New WebSocket connection: {}", addr);
+
+    let ws_stream = tokio_tungstenite::accept_async(stream)
+        .await
+        .expect("Error during the websocket handshake occurred");
+
+    let (write, read) = ws_stream.split();
+    let write = Arc::new(Mutex::new(write));
+    let device_state = Arc::new(DeviceState::new());
+    let last_keys = Arc::new(Mutex::new(HashSet::new()));
+
+    let write_clone = Arc::clone(&write);
+    let config_clone = Arc::clone(&config);
+
+    tokio::spawn(handle_incoming_messages(read, config_clone, write_clone.clone(), tx.clone()));
+    tokio::spawn(handle_key_events(device_state, last_keys, write_clone, tx));
+}
+
+async fn handle_incoming_messages(
+    mut read: WebSocketRx,
+    config: Arc<Mutex<Value>>,
+    write: Arc<Mutex<WebSocketTx>>,
+    tx: broadcast::Sender<String>,
+) {
+    while let Some(message) = read.next().await {
+        let message = message.expect("Failed to read message");
+
+        if let Message::Text(text) = message {
+            if text.starts_with("SAVE_CONFIG:") {
+                let config_str = text.replace("SAVE_CONFIG:", "");
+                let new_config: Value = serde_json::from_str(&config_str).expect("Failed to parse config");
+
+                let mut config_guard = config.lock().await;
+                *config_guard = new_config.clone();
+                save_config(&config_guard);
+                
+                // Broadcast the updated config to all clients
+                let _ = tx.send(format!("CONFIG:{}", serde_json::to_string(&*config_guard).unwrap()));
+            } else if text == "LOAD_CONFIG" {
+                let config_guard = config.lock().await;
+                let config_str = serde_json::to_string(&*config_guard).expect("Failed to serialize config");
+
+                let mut write_guard = write.lock().await;
+                let _ = write_guard.send(Message::Text(format!("CONFIG:{}", config_str))).await;
+            }
+        }
+    }
+}
+
+async fn handle_key_events(
+    device_state: Arc<DeviceState>,
+    last_keys: Arc<Mutex<HashSet<Keycode>>>,
+    write: Arc<Mutex<WebSocketTx>>,
+    tx: broadcast::Sender<String>,
+) {
+    loop {
+        let keys: HashSet<Keycode> = device_state.get_keys().into_iter().collect();
+        let mut last_keys_guard = last_keys.lock().await;
+    
+        if !keys.is_empty() {
+            for key in &keys {
+                println!("Key detected: {:?}", key);
+                last_keys_guard.insert(key.clone());
+            }
+        }
+    
+        if keys.is_empty() && !last_keys_guard.is_empty() {
+            let combo = last_keys_guard
+                .iter()
+                .map(|k| map_keycode(k))
+                .collect::<Vec<String>>()
+                .join("+");
+    
+            if !combo.is_empty() {
+                println!("Combo detected: {}", combo);
+    
+                let _ = tx.send(format!("COMBO:{}", combo));
+
+                let mut write_guard = write.lock().await;
+                match write_guard.send(Message::Text(format!("COMBO:{}", combo))).await {
+                    Ok(_) => println!("Successfully sent combo: {}", combo),
+                    Err(e) => {
+                        println!("Failed to send combo: {}. Error: {:?}", combo, e);
+                        if e.to_string().contains("WebSocket connection is closed") {
+                            println!("WebSocket is closed. Unable to send combo.");
+                            // You might want to implement a reconnection mechanism here
+                        }
+                    }
+                }
+    
+                last_keys_guard.clear();
+                println!("Cleared last_keys_guard after processing combo.");
+                tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+            }
+        }
+    
+        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
     }
 }
 
@@ -85,8 +195,8 @@ fn map_keycode(key: &Keycode) -> String {
         "NumpadPlus" => "NumpadAdd".to_string(),
         "NumpadEnter" => "NumpadEnter".to_string(),
         "NumpadDot" => "NumpadDecimal".to_string(),
-        "ControlLeft" => "LCtrl".to_string(),
-        "ControlRight" => "RCtrl".to_string(),
+        "ControlLeft" => "LControl".to_string(),
+        "ControlRight" => "RControl".to_string(),
         "AltLeft" => "LAlt".to_string(),
         "AltRight" => "RAlt".to_string(),
         "ShiftLeft" => "LShift".to_string(),
@@ -94,83 +204,5 @@ fn map_keycode(key: &Keycode) -> String {
         "MetaLeft" => "LCommand".to_string(),
         "MetaRight" => "RCommand".to_string(),
         _ => format!("{:?}", key),
-    }
-}
-
-async fn accept_connection(stream: TcpStream) {
-    let addr = stream.peer_addr().expect("Connected streams should have a peer address");
-    println!("New WebSocket connection: {}", addr);
-
-    let ws_stream = tokio_tungstenite::accept_async(stream)
-        .await
-        .expect("Error during the websocket handshake occurred");
-
-    let (write, mut read) = ws_stream.split();
-    let write = Arc::new(Mutex::new(write));  // Wrap `write` in `Arc<Mutex<_>>`
-    let device_state = Arc::new(DeviceState::new());
-    let last_keys = Arc::new(Mutex::new(HashSet::new())) as Arc<Mutex<HashSet<Keycode>>>;
-
-    let config = Arc::new(Mutex::new(load_config()));
-
-    let write_clone = Arc::clone(&write);
-    let config_clone = Arc::clone(&config);
-
-    tokio::spawn(async move {
-        while let Some(message) = read.next().await {
-            let message = message.expect("Failed to read message");
-
-            if let Message::Text(text) = message {
-                if text.starts_with("SAVE_CONFIG:") {
-                    let config_str = text.replace("SAVE_CONFIG:", "");
-                    let new_config: Value = serde_json::from_str(&config_str).expect("Failed to parse config");
-
-                    let mut config_guard = config_clone.lock().await;
-                    *config_guard = new_config;
-                    save_config(&config_guard);
-                } else if text == "LOAD_CONFIG" {
-                    let config_guard = config_clone.lock().await;
-                    let config_str = serde_json::to_string(&*config_guard).expect("Failed to serialize config");
-
-                    let mut write_guard = write_clone.lock().await;
-                    write_guard.send(Message::Text(format!("CONFIG:{}", config_str))).await.expect("Failed to send config");
-                }
-            }
-        }
-    });
-
-    loop {
-        let keys: HashSet<Keycode> = device_state.get_keys().into_iter().collect();
-        let mut last_keys_guard = last_keys.lock().await;
-    
-        if !keys.is_empty() {
-            for key in &keys {
-                println!("Key detected: {:?}", key);
-                last_keys_guard.insert(key.clone());
-            }
-        }
-    
-        if keys.is_empty() && !last_keys_guard.is_empty() {
-            let combo = last_keys_guard
-                .iter()
-                .map(|k| map_keycode(k))
-                .collect::<Vec<String>>()
-                .join("+");
-    
-            if !combo.is_empty() {
-                println!("Combo detected: {}", combo);
-    
-                let mut write_guard = write.lock().await;
-                match write_guard.send(Message::Text(format!("COMBO:{}", combo))).await {
-                    Ok(_) => println!("Successfully sent combo: {}", combo),
-                    Err(e) => println!("Failed to send combo: {}. Error: {:?}", combo, e),
-                }
-    
-                last_keys_guard.clear();
-                println!("Cleared last_keys_guard after processing combo.");
-                tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
-            }
-        }
-    
-        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
     }
 }
