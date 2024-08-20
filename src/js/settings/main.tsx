@@ -171,8 +171,12 @@ const Settings: React.FC = () => {
                 appendToDebugLog(`Found binding for combo: ${normalizedCombo}`);
         
                 if (binding.path) {
-                    appendToDebugLog(`Executing script for path: ${binding.path} and track: ${binding.track}`);
-                    executePremiereProScript(binding.path, parseInt(binding.track.replace('A', ''), 10));
+                    appendToDebugLog(`Executing script for path: ${binding.path}, track: ${binding.track}, and volume: ${binding.volume}dB`);
+                    executePremiereProScript(
+                        binding.path, 
+                        parseInt(binding.track.replace('A', ''), 10), 
+                        binding.volume
+                    );
                 } else {
                     appendToDebugLog(`No path specified for combo: ${normalizedCombo}`);
                 }
@@ -185,10 +189,10 @@ const Settings: React.FC = () => {
     };
 
 
-    const executePremiereProScript = (filePath: string, track: number): void => {
-        appendToDebugLog(`Executing Premiere Pro script with file: ${filePath} and track: ${track}`);
-        if (!filePath || isNaN(track)) {
-            appendToDebugLog("Invalid file path or track number.");
+    const executePremiereProScript = (filePath: string, track: number, volume: number): void => {
+        appendToDebugLog(`Executing Premiere Pro script with file: ${filePath}, track: ${track}, and volume: ${volume}dB`);
+        if (!filePath || isNaN(track) || isNaN(volume)) {
+            appendToDebugLog("Invalid file path, track number, or volume.");
             return;
         }
     
@@ -199,7 +203,7 @@ const Settings: React.FC = () => {
             try {
                 $.writeln("Attempting to load file from: " + "${jsxFilePath}");
                 $.evalFile("${jsxFilePath}");
-                var result = importAudioToTrack("${filePath.replace(/\\/g, '\\\\')}", ${track});
+                var result = importAudioToTrack("${filePath.replace(/\\/g, '\\\\')}", ${track}, ${volume});
                 $.writeln('Success: ' + result);
                 result; // Ensure result is returned
             } catch(e) {
@@ -217,7 +221,6 @@ const Settings: React.FC = () => {
             appendToDebugLog("window.__adobe_cep__.evalScript is not available");
         }
     };
-    
     
 
 
