@@ -40,12 +40,35 @@ function findNewlyAddedClip(sequence, audioItem, playheadPositionSeconds, audioT
     return null;
 }
 
+
+function isSpaceAvailableOnTrack(track, time) {
+    for (var i = 0; i < track.clips.numItems; i++) {
+        var clip = track.clips[i];
+        if (clip.start.seconds <= time.seconds && clip.end.seconds > time.seconds) {
+            return false;
+        }
+    }
+    return true;
+}
+
+function findFirstAvailableTrack(sequence, startIndex, time) {
+    for (var i = startIndex; i < sequence.audioTracks.numTracks; i++) {
+        var track = sequence.audioTracks[i];
+        if (!track.isLocked()) {
+            var spaceAvailable = isSpaceAvailableOnTrack(track, time);
+            if (spaceAvailable) {
+                return track;
+            }
+        }
+    }
+    return null;
+}
+
+
 function importAudioToTrack(filePath, initialTrackIndex, volume) {
     try {
-        // Enable QE (Quality Engineering) mode
         app.enableQE();
 
-        // Get the active sequence
         var project = app.project;
         var sequence = project.activeSequence;
 
@@ -53,7 +76,6 @@ function importAudioToTrack(filePath, initialTrackIndex, volume) {
             return "No active sequence";
         }
 
-        // Import the audio file
         var importArray = [filePath];
         var importSuccessful = project.importFiles(importArray, 1, project.rootItem, 0);
 
@@ -61,39 +83,49 @@ function importAudioToTrack(filePath, initialTrackIndex, volume) {
             return "Import failed";
         }
 
-        // Get the imported item from the project
         var importedItem = project.rootItem.children[project.rootItem.children.numItems - 1];
 
         if (!importedItem) {
             return "Import item not found";
         }
 
-        // Get the current time position of the playhead in the sequence
         var time = sequence.getPlayerPosition();
-        var playheadPositionSeconds = time.seconds;
-
-        // Get the target audio track
-        var audioTrack = sequence.audioTracks[initialTrackIndex - 1];
+        
+        // Find the first available unlocked track starting from the initial track
+        var audioTrack = findFirstAvailableTrack(sequence, initialTrackIndex - 1, time);
 
         if (!audioTrack) {
-            return "Track not found";
+            return "No available unlocked tracks found";
         }
 
-        // Insert the clip into the audio track
+        // Insert the clip at the determined position
         var newClip = audioTrack.insertClip(importedItem, time);
 
         // Find and select the newly added clip
-        var foundClip = findNewlyAddedClip(sequence, importedItem, playheadPositionSeconds, initialTrackIndex - 1);
+        var foundClip = findNewlyAddedClip(sequence, importedItem, time.seconds, audioTrack.index);
         if (foundClip) {
             sequence.setSelection([foundClip]);
-
-            // Apply the specified volume to the selected clip
             setClipVolume(foundClip, volume);
         }
 
-        return "Success";
+        return "Success: Placed on track " + (audioTrack.index + 1);
 
     } catch (e) {
         return "Error: " + e.toString();
     }
+}
+
+function findNextAvailableSpace(audioTrack, startTime) {
+    var clips = audioTrack.clips;
+    var currentTime = startTime;
+
+    for (var i = 0; i < clips.numItems; i++) {
+        var clip = clips[i];
+        if (clip.start.seconds >= currentTime.seconds) {
+            return currentTime;
+        }
+        currentTime = clip.end;
+    }
+
+    return currentTime;
 }
