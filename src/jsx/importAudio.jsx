@@ -87,6 +87,11 @@ function importAudioToTrack(filePath, initialTrackIndex, volume) {
         }
         debugLog += "Sequence found\n";
 
+        // Get the sequence frame rate
+        var frameRate = sequence.getSettings().videoFrameRate.seconds;
+        var framesPerSecond = Math.round(1 / frameRate); // Calculate frames per second
+        debugLog += "Sequence frame rate: " + framesPerSecond + " fps\n";
+
         var importArray = [filePath];
         var importSuccessful = project.importFiles(importArray, 1, project.rootItem, 0);
         if (!importSuccessful) {
@@ -120,7 +125,6 @@ function importAudioToTrack(filePath, initialTrackIndex, volume) {
                 var ticks = parseInt(durationParts[3]);
 
                 // Convert ticks to frames and then to seconds based on the frame rate
-                var framesPerSecond = 30; // Your sequence frame rate
                 var ticksPerFrame = 1602; // Example, assuming each frame has 1602 sub-ticks or whatever `09610` might represent
                 var frames = ticks / ticksPerFrame;
                 audioDuration = (hours * 3600) + (minutes * 60) + seconds + (frames / framesPerSecond);
