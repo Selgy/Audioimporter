@@ -102,71 +102,53 @@ function isSpaceFree(track, startTime, endTime) {
     return true;
 }
 
-function findSpaceOnTrack(track, startTime, clipDuration) {
-    var endTime = new Time();
-    endTime.seconds = startTime.seconds + clipDuration.seconds;
 
-    for (var i = 0; i < track.clips.numItems; i++) {
-        var clip = track.clips[i];
-        if (clip.start.seconds >= endTime.seconds) {
-            return startTime;
-        }
-        if (clip.end.seconds > startTime.seconds) {
-            startTime.seconds = clip.end.seconds;
-            endTime.seconds = startTime.seconds + clipDuration.seconds;
+function importAudioToTrack(filePath, initialTrackIndex, volume, debugMode) {
+    var debugLog = "Debug Log:\n";
+    var debugAlerts = [];
+
+    function addDebugMessage(message) {
+        debugLog += message + "\n";
+        if (debugMode) {
+            debugAlerts.push(message);
         }
     }
-    return startTime;
-}
 
-
-function importAudioToTrack(filePath, initialTrackIndex, volume) {
-    var debugLog = "Debug Log:\n";
-    
     try {
         app.enableQE();
-        debugLog += "QE enabled\n";
-        alert("Debug 1: QE enabled");
+        addDebugMessage("Debug 1: QE enabled");
 
         var project = app.project;
         if (!project) {
             return alert("Error: No active project");
         }
-        debugLog += "Project found\n";
-        alert("Debug 2: Project found");
+        addDebugMessage("Debug 2: Project found");
 
         var sequence = project.activeSequence;
         if (!sequence) {
             return alert("Error: No active sequence");
         }
-        debugLog += "Sequence found\n";
-        alert("Debug 3: Sequence found");
+        addDebugMessage("Debug 3: Sequence found");
 
         var frameRate = sequence.getSettings().videoFrameRate.seconds;
         var framesPerSecond = Math.round(1 / frameRate);
-        debugLog += "Sequence frame rate: " + framesPerSecond + " fps\n";
-        alert("Debug 4: Frame rate: " + framesPerSecond + " fps");
+        addDebugMessage("Debug 4: Frame rate: " + framesPerSecond + " fps");
 
         var importArray = [filePath];
         var importSuccessful = project.importFiles(importArray, 1, project.rootItem, 0);
         if (!importSuccessful) {
             return alert("Error: Import failed");
         }
-        debugLog += "File imported\n";
-        alert("Debug 5: File imported");
+        addDebugMessage("Debug 5: File imported");
 
         var importedItem = project.rootItem.children[project.rootItem.children.numItems - 1];
         if (!importedItem) {
             return alert("Error: Import item not found");
         }
-        debugLog += "Imported item found\n";
-        debugLog += "Imported item name: " + importedItem.name + "\n";
-        debugLog += "Imported item type: " + importedItem.type + "\n";
-        alert("Debug 6: Imported item found - Name: " + importedItem.name + ", Type: " + importedItem.type);
+        addDebugMessage("Debug 6: Imported item found - Name: " + importedItem.name + ", Type: " + importedItem.type);
 
         var metadata = importedItem.getProjectMetadata();
-        debugLog += "Metadata retrieved\n";
-        alert("Debug 7: Metadata retrieved");
+        addDebugMessage("Debug 7: Metadata retrieved");
         
         var durationMatch = metadata.match(/<premierePrivateProjectMetaData:Column\.Intrinsic\.MediaDuration>(.*?)<\/premierePrivateProjectMetaData:Column\.Intrinsic\.MediaDuration>/);
         var audioDuration = 0;
@@ -183,8 +165,7 @@ function importAudioToTrack(filePath, initialTrackIndex, volume) {
                 var frames = ticks / ticksPerFrame;
                 audioDuration = (hours * 3600) + (minutes * 60) + seconds + (frames / framesPerSecond);
             }
-            debugLog += "Duration found in metadata: " + audioDuration + " seconds\n";
-            alert("Debug 8: Duration found: " + audioDuration + " seconds");
+            addDebugMessage("Debug 8: Duration found: " + audioDuration + " seconds");
         } else {
             debugLog += "Duration not found in metadata. Full metadata:\n" + metadata + "\n";
             return alert("Error: Unable to determine audio duration from metadata\n\n" + debugLog);
@@ -194,20 +175,17 @@ function importAudioToTrack(filePath, initialTrackIndex, volume) {
         if (!time) {
             return alert("Error: Could not get player position");
         }
-        debugLog += "Player position: " + time.seconds + " seconds\n";
-        alert("Debug 9: Player position: " + time.seconds + " seconds");
+        addDebugMessage("Debug 9: Player position: " + time.seconds + " seconds");
 
         initialTrackIndex = parseInt(initialTrackIndex);
         if (isNaN(initialTrackIndex) || initialTrackIndex < 1) {
             initialTrackIndex = 1;
         }
-        debugLog += "Initial track index: " + initialTrackIndex + "\n";
-        debugLog += "Total audio tracks: " + sequence.audioTracks.numTracks + "\n";
-        alert("Debug 10: Initial track index: " + initialTrackIndex + ", Total audio tracks: " + sequence.audioTracks.numTracks);
+        addDebugMessage("Debug 10: Initial track index: " + initialTrackIndex + ", Total audio tracks: " + sequence.audioTracks.numTracks);
 
         var placementResult = findPlacementLocation(sequence, initialTrackIndex - 1, time, {seconds: audioDuration});
         debugLog += placementResult.debugLog;
-        alert("Debug 11: Placement location found");
+        addDebugMessage("Debug 11: Placement location found");
 
         if (!placementResult.track || !placementResult.time) {
             return alert("Error: No available space found on any unlocked track\n\n" + debugLog);
@@ -215,9 +193,9 @@ function importAudioToTrack(filePath, initialTrackIndex, volume) {
 
         var audioTrack = placementResult.track;
         var insertTime = placementResult.time;
-        var audioTrackIndex = audioTrack.index;  // Store the index explicitly
-        debugLog += "Inserting at " + insertTime.seconds.toFixed(2) + " seconds on track " + (audioTrackIndex + 1) + "\n";
-        alert("Debug 12: Inserting at " + insertTime.seconds.toFixed(2) + " seconds on track " + (audioTrackIndex + 1));
+        var intendedTrackIndex = placementResult.trackIndex;
+        
+        addDebugMessage("Debug 12: Attempting to insert at " + insertTime.seconds.toFixed(2) + " seconds on intended track " + (intendedTrackIndex + 1));
 
         var newClip;
         try {
@@ -225,74 +203,54 @@ function importAudioToTrack(filePath, initialTrackIndex, volume) {
             if (!newClip) {
                 throw new Error("insertClip returned null or undefined");
             }
-            debugLog += "Clip inserted\n";
-            alert("Debug 13: Clip inserted");
+            addDebugMessage("Debug 13: Clip inserted");
         } catch (insertError) {
             debugLog += "Error inserting clip: " + insertError.toString() + "\n";
             return alert("Error: Failed to insert clip - " + insertError.toString() + "\n\n" + debugLog);
         }
 
-        // Attempt to recover track information if it becomes undefined
-        if (audioTrack.index === undefined) {
-            debugLog += "Warning: audioTrack.index became undefined after insertion\n";
-            alert("Debug Warning: audioTrack.index became undefined after insertion");
-            
-            // Attempt to find the track by iterating through all audio tracks
-            for (var i = 0; i < sequence.audioTracks.numTracks; i++) {
-                var track = sequence.audioTracks[i];
-                if (track.clips.numItems > 0 && track.clips[track.clips.numItems - 1].name === importedItem.name) {
-                    audioTrackIndex = i;
-                    audioTrack = track;
-                    debugLog += "Recovered audio track index: " + audioTrackIndex + "\n";
-                    alert("Debug: Recovered audio track index: " + audioTrackIndex);
-                    break;
-                }
+        // Search for the newly added clip, starting from the intended track
+        var finalAudioTrackIndex = intendedTrackIndex;
+        var foundClip;
+        for (var i = intendedTrackIndex; i < sequence.audioTracks.numTracks; i++) {
+            var track = sequence.audioTracks[i];
+            var lastClip = track.clips[track.clips.numItems - 1];
+            if (lastClip && lastClip.name === importedItem.name && Math.abs(lastClip.start.seconds - insertTime.seconds) < 0.1) {
+                finalAudioTrackIndex = i;
+                foundClip = lastClip;
+                addDebugMessage("Debug 14: Found newly inserted clip on track " + (finalAudioTrackIndex + 1));
+                break;
             }
-        } else {
-            audioTrackIndex = audioTrack.index;
         }
 
-        debugLog += "Audio track index after insertion: " + audioTrackIndex + "\n";
-        alert("Debug 14: Audio track index after insertion: " + audioTrackIndex);
+        if (!foundClip) {
+            debugLog += "Error: Unable to find the newly inserted clip on any track\n";
+            return alert("Error: Unable to find the newly inserted clip\n\n" + debugLog);
+        }
 
-        if (audioTrackIndex === undefined || audioTrackIndex < 0 || audioTrackIndex >= sequence.audioTracks.numTracks) {
-            debugLog += "Error: Invalid audioTrackIndex after insertion: " + audioTrackIndex + "\n";
-            return alert("Error: Invalid audioTrackIndex after insertion: " + audioTrackIndex + "\n\n" + debugLog);
+        addDebugMessage("Debug 15: Final audio track index: " + (finalAudioTrackIndex + 1));
+
+        if (finalAudioTrackIndex !== intendedTrackIndex) {
+            addDebugMessage("Warning: Clip was placed on track " + (finalAudioTrackIndex + 1) + " instead of intended track " + (intendedTrackIndex + 1));
         }
 
         try {
-            var foundClip = findNewlyAddedClip(sequence, importedItem, insertTime.seconds, audioTrackIndex);
-            debugLog += "findNewlyAddedClip executed\n";
-            if (foundClip) {
-                debugLog += "Newly added clip found\n";
-                alert("Debug 15: Newly added clip found");
-
-                try {
-                    sequence.setSelection([foundClip]);
-                    debugLog += "Clip selection successful\n";
-                    alert("Debug 16: Clip selection successful");
-                } catch (selectionError) {
-                    debugLog += "Error during clip selection: " + selectionError.toString() + "\n";
-                    alert("Debug Error: Clip selection failed - " + selectionError.toString());
-                }
-
-                try {
-                    setClipVolume(foundClip, volume);
-                    debugLog += "Clip volume set to " + volume + " dB\n";
-                    alert("Debug 17: Clip volume set to " + volume + " dB");
-                } catch (volumeError) {
-                    debugLog += "Error setting clip volume: " + volumeError.toString() + "\n";
-                    alert("Debug Error: Setting clip volume failed - " + volumeError.toString());
-                }
-            } else {
-                debugLog += "Warning: Newly added clip not found\n";
-                alert("Debug Error: Newly added clip not found");
-            }
-        } catch (findClipError) {
-            debugLog += "Error finding newly added clip: " + findClipError.toString() + "\n";
-            alert("Debug Error: Finding newly added clip failed - " + findClipError.toString());
+            sequence.setSelection([foundClip]);
+            addDebugMessage("Debug 16: Clip selection successful");
+        } catch (selectionError) {
+            addDebugMessage("Debug Error: Clip selection failed - " + selectionError.toString());
         }
 
+        try {
+            setClipVolume(foundClip, volume);
+            addDebugMessage("Debug 17: Clip volume set to " + volume + " dB");
+        } catch (volumeError) {
+            addDebugMessage("Debug Error: Setting clip volume failed - " + volumeError.toString());
+        }
+
+        if (debugMode) {
+            alert(debugAlerts.join("\n"));
+        }
         return alert("Process completed. Check debug log for details:\n\n" + debugLog);
 
     } catch (e) {
@@ -310,7 +268,7 @@ function findPlacementLocation(sequence, startIndex, playheadTime, clipDuration)
             var space = findSpaceOnTrack(track, playheadTime, clipDuration);
             if (space) {
                 debugLog += "Space found on track " + (i + 1) + " at " + space.seconds + " seconds\n";
-                return { track: track, time: space, debugLog: debugLog };
+                return { track: track, time: space, trackIndex: i, debugLog: debugLog };
             } else {
                 debugLog += "No space found on track " + (i + 1) + "\n";
             }
@@ -319,7 +277,7 @@ function findPlacementLocation(sequence, startIndex, playheadTime, clipDuration)
         }
     }
     debugLog += "No suitable space found on any track\n";
-    return { track: null, time: null, debugLog: debugLog };
+    return { track: null, time: null, trackIndex: null, debugLog: debugLog };
 }
 
 function findSpaceOnTrack(track, playheadTime, clipDuration) {
