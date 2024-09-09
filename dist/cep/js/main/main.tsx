@@ -253,14 +253,14 @@ const Main: React.FC = () => {
     
 
     const updateBinding = (key: string, value: AudioBinding) => {
+        console.log('Updating binding with pitch:', value.pitch); // Add this log to check the pitch value
         setConfig((prevConfig: Config) => {
             const newConfig = { ...prevConfig, [key]: value };
             appendToDebugLog(`Updating config for key: ${key} with value: ${JSON.stringify(value)}`);
-            saveConfig(newConfig);
-            appendToDebugLog(`Binding updated for ${key}`);
             return newConfig;
         });
     };
+    
 
 
     
@@ -274,7 +274,19 @@ const Main: React.FC = () => {
         });
     };
 
+    const handleNumberInput = useCallback((key: string, field: 'volume' | 'pitch', value: string) => {
+        const numValue = parseFloat(value);
+        if (!isNaN(numValue)) {
+            if (field === 'pitch' && (numValue < -12 || numValue > 12)) {
+                return; // Pitch should be between -12 and 12
+            }
+            updateBinding(key, { ...config[key], [field]: numValue }); // Make sure pitch is updated here
+        }
+    }, [config, updateBinding]);
     
+    
+
+
     const formatKeyCombination = (keyCombination: string): string => {
         const keyMap: { [key: string]: string } = {
             'LAlt': 'Alt',
@@ -399,27 +411,33 @@ const Main: React.FC = () => {
                             onClick={() => selectAudioFile(key)} 
                             style={{ width: '120px', padding: '6px', backgroundColor: '#4e52ff', color: '#ffffff', borderRadius: '2px', border: 'none', marginRight: '10px' }}
                         >
-                            Select audio...
+                            Audio...
                         </button>
                         <input 
                             type="number" 
-                            value={config[key].volume} 
-                            onChange={(e) => updateBinding(key, { ...config[key], volume: parseInt(e.target.value) })} 
-                            style={{ width: '30px', padding: '6px', backgroundColor: '#3e41a8', color: '#ffffff', border: 'none', borderRadius: '2px', marginRight: '10px' }} 
+                            value={config[key].volume}
+                            onChange={(e) => handleNumberInput(key, 'volume', e.target.value)} 
+                            style={{ width: '60px', padding: '6px', backgroundColor: '#3e41a8', color: '#ffffff', border: 'none', borderRadius: '2px', marginRight: '5px' }} 
                         />
+                        <span style={{ marginRight: '10px' }}>dB</span>
                         <input 
                             type="number" 
-                            value={config[key].pitch} 
-                            onChange={(e) => updateBinding(key, { ...config[key], pitch: parseInt(e.target.value) })} 
-                            style={{ width: '30px', padding: '6px', backgroundColor: '#3e41a8', color: '#ffffff', border: 'none', borderRadius: '2px', marginRight: '10px' }} 
+                            value={config[key].pitch}
+                            onChange={(e) => handleNumberInput(key, 'pitch', e.target.value)} 
+                            min="-12"
+                            max="12"
+                            step="1"
+                            style={{ width: '60px', padding: '6px', backgroundColor: '#3e41a8', color: '#ffffff', border: 'none', borderRadius: '2px', marginRight: '5px' }} 
                         />
+                        <span style={{ marginRight: '10px' }}>st</span>
                         <label style={{ display: 'flex', alignItems: 'center', marginLeft: '5px', justifyContent: 'center' }}>
                             <input 
                                 type="checkbox" 
                                 checked={config[key].importInMiddle || false} 
                                 onChange={(e) => updateBinding(key, { ...config[key], importInMiddle: e.target.checked })} 
-                                style={{ marginRight: '0px' }} 
+                                style={{ marginRight: '5px' }} 
                             />
+                            Middle
                         </label>
                     </div>
                 ))}

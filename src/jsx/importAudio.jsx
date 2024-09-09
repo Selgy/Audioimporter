@@ -1,116 +1,10 @@
-function dbToDecibel(x) {
-    return Math.pow(10, (x - 15) / 20);
-}
-
-function setClipVolume(clip, volumeDb) {
-    try {
-        if (!clip) {
-            return;
-        }
-        for (var i = 0; i < clip.components.numItems; i++) {
-            var component = clip.components[i];
-            if (component.displayName === "Volume") {
-                for (var j = 0; j < component.properties.numItems; j++) {
-                    var property = component.properties[j];
-                    if (property.displayName === "Level") {
-                        var volumeInDec = dbToDecibel(volumeDb); // Convert volumeDb to Premiere's internal scale
-                        property.setValue(volumeInDec, true);
-                        return;
-                    }
-                }
-            }
-        }
-    } catch (e) {
-        // Handle the error as needed
-    }
-}
-
-function findNewlyAddedClip(sequence, audioItem, playheadPositionSeconds, audioTrackIndex) {
-    var debugLog = "findNewlyAddedClip debug:\n";
-    
-    try {
-        if (!sequence) {
-            debugLog += "Error: sequence is undefined\n";
-            throw new Error("sequence is undefined");
-        }
-        debugLog += "Sequence check passed\n";
-
-        if (!sequence.audioTracks) {
-            debugLog += "Error: sequence.audioTracks is undefined\n";
-            throw new Error("sequence.audioTracks is undefined");
-        }
-        debugLog += "audioTracks check passed\n";
-
-        debugLog += "Total audio tracks: " + sequence.audioTracks.numTracks + "\n";
-        debugLog += "Attempting to access audio track at index: " + audioTrackIndex + "\n";
-
-        if (audioTrackIndex === undefined || audioTrackIndex < 0 || audioTrackIndex >= sequence.audioTracks.numTracks) {
-            debugLog += "Error: audioTrackIndex " + audioTrackIndex + " is out of bounds\n";
-            throw new Error("audioTrackIndex is out of bounds");
-        }
-
-        var audioTrack = sequence.audioTracks[audioTrackIndex];
-        if (!audioTrack) {
-            debugLog += "Error: audioTrack at index " + audioTrackIndex + " is undefined\n";
-            throw new Error("audioTrack is undefined");
-        }
-        debugLog += "audioTrack found\n";
-
-        if (!audioTrack.clips) {
-            debugLog += "Error: audioTrack.clips is undefined\n";
-            throw new Error("audioTrack.clips is undefined");
-        }
-        debugLog += "clips check passed\n";
-
-        debugLog += "Number of clips in audioTrack: " + audioTrack.clips.numItems + "\n";
-
-        for (var i = 0; i < audioTrack.clips.numItems; i++) {
-            var clip = audioTrack.clips[i];
-            if (!clip) {
-                debugLog += "Warning: clip at index " + i + " is undefined, skipping\n";
-                continue;
-            }
-            
-            var clipStartSeconds = clip.start.seconds;
-            debugLog += "Checking clip " + i + ": name = " + clip.name + ", start time = " + clipStartSeconds + "\n";
-            
-            if (clip.name === audioItem.name && Math.abs(clipStartSeconds - playheadPositionSeconds) < 0.1) {
-                debugLog += "Matching clip found\n";
-                alert("Debug: Matching clip found in findNewlyAddedClip");
-                return clip;
-            }
-        }
-        
-        debugLog += "No matching clip found\n";
-        alert("Debug: No matching clip found in findNewlyAddedClip");
-        return null;
-    } catch (e) {
-        debugLog += "Error in findNewlyAddedClip: " + e.toString() + "\n";
-        alert("Debug Error in findNewlyAddedClip: " + e.toString() + "\n\n" + debugLog);
-        throw e;
-    }
-}
-
-
-function isSpaceFree(track, startTime, endTime) {
-    for (var i = 0; i < track.clips.numItems; i++) {
-        var clip = track.clips[i];
-        if (clip.start.seconds < endTime.seconds && clip.end.seconds > startTime.seconds) {
-            return false;
-        }
-    }
-    return true;
-}
-
-
-function importAudioToTrack(filePath, initialTrackIndex, volume, debugMode) {
+function importAudioToTrack(filePath, initialTrackIndex, volume, pitch, debugMode) {
     var debugLog = "Debug Log:\n";
-    var debugAlerts = [];
 
     function addDebugMessage(message) {
         debugLog += message + "\n";
         if (debugMode) {
-            debugAlerts.push(message);
+            $.writeln(message);  // This writes to the ExtendScript Toolkit console
         }
     }
 
@@ -120,13 +14,13 @@ function importAudioToTrack(filePath, initialTrackIndex, volume, debugMode) {
 
         var project = app.project;
         if (!project) {
-            return alert("Error: No active project");
+            throw new Error("No active project");
         }
         addDebugMessage("Debug 2: Project found");
 
         var sequence = project.activeSequence;
         if (!sequence) {
-            return alert("Error: No active sequence");
+            throw new Error("No active sequence");
         }
         addDebugMessage("Debug 3: Sequence found");
 
@@ -137,13 +31,13 @@ function importAudioToTrack(filePath, initialTrackIndex, volume, debugMode) {
         var importArray = [filePath];
         var importSuccessful = project.importFiles(importArray, 1, project.rootItem, 0);
         if (!importSuccessful) {
-            return alert("Error: Import failed");
+            throw new Error("Import failed");
         }
         addDebugMessage("Debug 5: File imported");
 
         var importedItem = project.rootItem.children[project.rootItem.children.numItems - 1];
         if (!importedItem) {
-            return alert("Error: Import item not found");
+            throw new Error("Import item not found");
         }
         addDebugMessage("Debug 6: Imported item found - Name: " + importedItem.name + ", Type: " + importedItem.type);
 
@@ -168,12 +62,12 @@ function importAudioToTrack(filePath, initialTrackIndex, volume, debugMode) {
             addDebugMessage("Debug 8: Duration found: " + audioDuration + " seconds");
         } else {
             debugLog += "Duration not found in metadata. Full metadata:\n" + metadata + "\n";
-            return alert("Error: Unable to determine audio duration from metadata\n\n" + debugLog);
+            throw new Error("Unable to determine audio duration from metadata");
         }
 
         var time = sequence.getPlayerPosition();
         if (!time) {
-            return alert("Error: Could not get player position");
+            throw new Error("Could not get player position");
         }
         addDebugMessage("Debug 9: Player position: " + time.seconds + " seconds");
 
@@ -188,7 +82,7 @@ function importAudioToTrack(filePath, initialTrackIndex, volume, debugMode) {
         addDebugMessage("Debug 11: Placement location found");
 
         if (!placementResult.track || !placementResult.time) {
-            return alert("Error: No available space found on any unlocked track\n\n" + debugLog);
+            throw new Error("No available space found on any unlocked track");
         }
 
         var audioTrack = placementResult.track;
@@ -205,8 +99,7 @@ function importAudioToTrack(filePath, initialTrackIndex, volume, debugMode) {
             }
             addDebugMessage("Debug 13: Clip inserted");
         } catch (insertError) {
-            debugLog += "Error inserting clip: " + insertError.toString() + "\n";
-            return alert("Error: Failed to insert clip - " + insertError.toString() + "\n\n" + debugLog);
+            throw new Error("Failed to insert clip - " + insertError.toString());
         }
 
         // Search for the newly added clip, starting from the intended track
@@ -224,8 +117,7 @@ function importAudioToTrack(filePath, initialTrackIndex, volume, debugMode) {
         }
 
         if (!foundClip) {
-            debugLog += "Error: Unable to find the newly inserted clip on any track\n";
-            return alert("Error: Unable to find the newly inserted clip\n\n" + debugLog);
+            throw new Error("Unable to find the newly inserted clip");
         }
 
         addDebugMessage("Debug 15: Final audio track index: " + (finalAudioTrackIndex + 1));
@@ -241,22 +133,205 @@ function importAudioToTrack(filePath, initialTrackIndex, volume, debugMode) {
             addDebugMessage("Debug Error: Clip selection failed - " + selectionError.toString());
         }
 
+        addDebugMessage("Debug 17a: Received pitch value: " + pitch);
+
         try {
             setClipVolume(foundClip, volume);
             addDebugMessage("Debug 17: Clip volume set to " + volume + " dB");
-        } catch (volumeError) {
-            addDebugMessage("Debug Error: Setting clip volume failed - " + volumeError.toString());
+            
+            addDebugMessage("Debug 18: Attempting to apply pitch shift");
+            if (pitch !== undefined && pitch !== null) {
+                setPitchShifter(foundClip, pitch);
+                addDebugMessage("Debug 19: Pitch shift applied with value: " + pitch);
+            } else {
+                addDebugMessage("Debug 19a: Skipping pitch shift - pitch value is undefined or null");
+            }
+
+        } catch (audioError) {
+            addDebugMessage("Debug Error: Audio processing failed - " + audioError.toString());
+            if (audioError.stack) {
+                addDebugMessage("Error stack: " + audioError.stack);
+            }
+            throw audioError;
         }
 
-        if (debugMode) {
-            alert(debugAlerts.join("\n"));
-        }
-        return alert("Process completed. Check debug log for details:\n\n" + debugLog);
+            // At the end of the function, add this alert:
+            alert("Import Audio Debug Log:\n" + debugLog);
+
+            return {
+                success: true,
+                message: "Audio imported successfully",
+                trackIndex: finalAudioTrackIndex + 1,
+                clipName: foundClip.name,
+                debugLog: debugLog
+            };
 
     } catch (e) {
-        return alert("Error in importAudioToTrack: " + e.toString() + "\n\nDebug Log:\n" + debugLog);
+        addDebugMessage("Fatal Error in importAudioToTrack: " + e.toString());
+        if (e.stack) {
+            addDebugMessage("Error stack: " + e.stack);
+        }
+        return {
+            success: false,
+            message: "Error in importAudioToTrack: " + e.toString(),
+            debugLog: debugLog
+        };
     }
 }
+
+// Helper functions
+
+function setClipVolume(clip, volumeDb) {
+    try {
+        if (!clip) {
+            throw new Error("Clip is undefined");
+        }
+        for (var i = 0; i < clip.components.numItems; i++) {
+            var component = clip.components[i];
+            if (component.displayName === "Volume") {
+                for (var j = 0; j < component.properties.numItems; j++) {
+                    var property = component.properties[j];
+                    if (property.displayName === "Level") {
+                        var volumeInDec = dbToDecibel(volumeDb);
+                        property.setValue(volumeInDec, true);
+                        return;
+                    }
+                }
+            }
+        }
+        throw new Error("Volume property not found");
+    } catch (e) {
+        throw new Error("Error in setClipVolume: " + e.toString());
+    }
+}
+
+function applyPitchShifter(clip, pitchValue) {
+    var pitchDebugLog = "Pitch Shifter Debug Log:\n";
+
+    try {
+        if (!clip) {
+            throw new Error("No selected clip found");
+        }
+
+        pitchDebugLog += "Clip found\n";
+
+        // Check if the clip already has a Pitch Shifter effect
+        var pitchShifterComponent = null;
+        for (var i = 0; i < clip.components.numItems; i++) {
+            if (clip.components[i].displayName === "Pitch Shifter") {
+                pitchShifterComponent = clip.components[i];
+                break;
+            }
+        }
+
+        // If no Pitch Shifter is found, add it
+        if (!pitchShifterComponent) {
+            pitchDebugLog += "No Pitch Shifter effect found, adding it\n";
+
+            // Get Pitch Shifter effect from the audio effect library
+            var pitchShifterEffect = app.project.getAudioEffectByName("Pitch Shifter");
+            if (!pitchShifterEffect) {
+                throw new Error("Pitch Shifter effect not found in Premiere");
+            }
+
+            // Add the Pitch Shifter effect to the clip
+            pitchShifterComponent = clip.addComponent(pitchShifterEffect);
+            if (!pitchShifterComponent) {
+                throw new Error("Failed to add Pitch Shifter effect");
+            }
+            pitchDebugLog += "Pitch Shifter effect added successfully\n";
+        }
+
+        // Adjust the Transpose property of the Pitch Shifter effect
+        var transposeProperty = null;
+        for (var j = 0; j < pitchShifterComponent.properties.numItems; j++) {
+            if (pitchShifterComponent.properties[j].displayName === "Transpose") {
+                transposeProperty = pitchShifterComponent.properties[j];
+                break;
+            }
+        }
+
+        if (!transposeProperty) {
+            throw new Error("Transpose property not found in Pitch Shifter effect");
+        }
+
+        // Convert semitones to transpose ratio (mapping from your old script)
+        var semitonesToRatio = {
+            12: 1, 11: 0.9251657128334, 10: 0.8545315861702, 9: 0.78786188364029,
+            8: 0.72493404150009, 7: 0.66553807258606, 6: 0.60947567224503,
+            5: 0.55655986070633, 4: 0.5066140294075, 3: 0.45947137475014,
+            2: 0.41497468948364, 1: 0.37297543883324, 0: 0.33333334326744,
+            "-1": 0.29591619968414, "-2": 0.26059913635254, "-3": 0.22726428508759,
+            "-4": 0.19580034911633, "-5": 0.16610236465931, "-6": 0.13807117938995,
+            "-7": 0.11161327362061, "-8": 0.08664035797119, "-9": 0.06306902319193,
+            "-10": 0.04082067683339, "-11": 0.0198210477829, "-12": 0
+        };
+
+        // Ensure the pitch value is mapped correctly
+        var transposeRatio = semitonesToRatio[pitchValue];
+        if (transposeRatio === undefined) {
+            throw new Error("Invalid pitch value");
+        }
+
+        // Set the Transpose property to the correct value
+        transposeProperty.setValue(transposeRatio, true);
+        pitchDebugLog += "Pitch Shifter Transpose set to " + transposeRatio + "\n";
+
+        // Final success message
+        alert("Pitch Shifter applied successfully. Debug log:\n" + pitchDebugLog);
+
+    } catch (e) {
+        pitchDebugLog += "Error in applyPitchShifter: " + e.toString() + "\n";
+        if (e.stack) {
+            pitchDebugLog += "Stack trace: " + e.stack + "\n";
+        }
+        alert("Error in applyPitchShifter: " + e.toString() + "\n\nDebug log:\n" + pitchDebugLog);
+    }
+}
+
+
+
+
+
+// Update the semitonesToTransposeRatio function to handle non-integer values
+function semitonesToTransposeRatio(semitones) {
+    var semitones_to_ratio_mapping = {
+        12: 1, 11: 0.9251657128334, 10: 0.8545315861702, 9: 0.78786188364029,
+        8: 0.72493404150009, 7: 0.66553807258606, 6: 0.60947567224503,
+        5: 0.55655986070633, 4: 0.5066140294075, 3: 0.45947137475014,
+        2: 0.41497468948364, 1: 0.37297543883324, 0: 0.33333334326744,
+        "-1": 0.29591619968414, "-2": 0.26059913635254, "-3": 0.22726428508759,
+        "-4": 0.19580034911633, "-5": 0.16610236465931, "-6": 0.13807117938995,
+        "-7": 0.11161327362061, "-8": 0.08664035797119, "-9": 0.06306902319193,
+        "-10": 0.04082067683339, "-11": 0.0198210477829, "-12": 0
+    };
+    
+    // Convert semitones to a number and round to nearest 0.5
+    var roundedSemitones = Math.round(Number(semitones) * 2) / 2;
+    
+    // If the rounded value is in our mapping, return it
+    if (semitones_to_ratio_mapping.hasOwnProperty(roundedSemitones.toString())) {
+        return semitones_to_ratio_mapping[roundedSemitones.toString()];
+    }
+    
+    // If not, interpolate between the two nearest values
+    var lowerSemitone = Math.floor(roundedSemitones);
+    var upperSemitone = Math.ceil(roundedSemitones);
+    var lowerRatio = semitones_to_ratio_mapping[lowerSemitone.toString()] || 0.33333334326744;
+    var upperRatio = semitones_to_ratio_mapping[upperSemitone.toString()] || 0.33333334326744;
+    
+    var interpolationFactor = roundedSemitones - lowerSemitone;
+    var interpolatedRatio = lowerRatio + (upperRatio - lowerRatio) * interpolationFactor;
+    
+    return interpolatedRatio;
+}
+
+
+function dbToDecibel(x) {
+    return Math.pow(10, (x - 15) / 20);
+}
+
+
 
 function findPlacementLocation(sequence, startIndex, playheadTime, clipDuration) {
     var debugLog = "";
@@ -305,4 +380,14 @@ function findSpaceOnTrack(track, playheadTime, clipDuration) {
 
     // If no space found, return null
     return null;
+}
+
+function isSpaceFree(track, startTime, endTime) {
+    for (var i = 0; i < track.clips.numItems; i++) {
+        var clip = track.clips[i];
+        if (clip.start.seconds < endTime.seconds && clip.end.seconds > startTime.seconds) {
+            return false;
+        }
+    }
+    return true;
 }

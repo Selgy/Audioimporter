@@ -3,7 +3,7 @@ export interface AudioBinding {
   pitch: number;
   track: string;
   path: string;
-  importInMiddle?: boolean;
+  importInMiddle: boolean;
 }
 
 export interface Config {

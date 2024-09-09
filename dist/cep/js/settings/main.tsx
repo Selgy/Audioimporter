@@ -15,7 +15,7 @@ const Settings: React.FC = () => {
     const configRef = useRef<Config>({});
     const [config, setConfig] = useState<Config>({});
     const [debugLog, setDebugLog] = useState<string[]>([]);
-    
+
 
     useEffect(() => {
         console.log('useEffect hook is running');
@@ -145,7 +145,6 @@ const Settings: React.FC = () => {
         appendToDebugLog(`Handling combo: ${combo}`);
         
         try {
-            // Fetch the latest config from the server
             const latestConfig = await fetchLatestConfig();
             appendToDebugLog(`Fetched latest config: ${JSON.stringify(latestConfig, null, 2)}`);
             
@@ -171,11 +170,12 @@ const Settings: React.FC = () => {
                 appendToDebugLog(`Found binding for combo: ${normalizedCombo}`);
         
                 if (binding.path) {
-                    appendToDebugLog(`Executing script for path: ${binding.path}, track: ${binding.track}, and volume: ${binding.volume}dB`);
+                    appendToDebugLog(`Executing script for path: ${binding.path}, track: ${binding.track}, volume: ${binding.volume}dB, and pitch: ${binding.pitch} semitones`);
                     executePremiereProScript(
                         binding.path, 
                         parseInt(binding.track.replace('A', ''), 10), 
-                        binding.volume
+                        binding.volume,
+                        binding.pitch ||0     // Provide a default value of 0 if pitch is undefined
                     );
                 } else {
                     appendToDebugLog(`No path specified for combo: ${normalizedCombo}`);
@@ -188,16 +188,9 @@ const Settings: React.FC = () => {
         }
     };
 
-
-    const executePremiereProScript = (filePath: string, track: number, volume: number): void => {
-        appendToDebugLog(`Executing Premiere Pro script with file: ${filePath}, track: ${track}, and volume: ${volume}dB`);
-        if (!filePath || isNaN(track) || isNaN(volume)) {
-            appendToDebugLog("Invalid file path, track number, or volume.");
-            return;
-        }
-    
-        // Calculate the relative path to the JSX file
-        const jsxRelativePath = '/js/settings/importAudio.jsx';
+    const executePremiereProScript = (filePath: string, track: number, volume: number, pitch: number) => {
+        console.log(`Executing script with pitch: ${pitch}`); // Add this log to check if pitch is passed
+        const jsxRelativePath = './jsx/importAudio.jsx';
         const jsxFullPath = path.resolve(__dirname, jsxRelativePath);
     
         const script = `
@@ -207,7 +200,7 @@ const Settings: React.FC = () => {
     
                 if (jsxFile.exists) {
                     $.evalFile(jsxFile);
-                    var result = importAudioToTrack("${filePath.replace(/\\/g, '\\\\')}", ${track}, ${volume});
+                    var result = importAudioToTrack("${filePath.replace(/\\/g, '\\\\')}", ${track}, ${volume}, ${pitch}, true);
                     $.writeln('Success: ' + result);
                     result;
                 } else {
@@ -218,6 +211,7 @@ const Settings: React.FC = () => {
                 e.toString();
             }
         `;
+        
     
         appendToDebugLog(`Evaluating script: ${script}`);
         if (window.__adobe_cep__ && window.__adobe_cep__.evalScript) {
@@ -228,7 +222,6 @@ const Settings: React.FC = () => {
             appendToDebugLog("window.__adobe_cep__.evalScript is not available");
         }
     };
-    
 
 
     
