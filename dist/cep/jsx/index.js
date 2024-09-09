@@ -51,7 +51,7 @@ var config = {
     jsxBin: "off"
   },
   installModules: [],
-  copyAssets: ["./target/release/audio_importer.exe"],
+  copyAssets: ["./target/release/audio_importer.exe", "./js", "./jsx"],
   copyZipAssets: []
 };
 

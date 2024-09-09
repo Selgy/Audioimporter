@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { Config, AudioBinding } from './types';
-
+import path from 'path';
 
 declare global {
     interface Window {
@@ -196,19 +196,26 @@ const Settings: React.FC = () => {
             return;
         }
     
-        // Use the correct absolute path to your JSX file
-        const jsxFilePath = 'E:/DEV/AudioImporter/src/jsx/importAudio.jsx';  // Using forward slashes
+        // Calculate the relative path to the JSX file
+        const jsxRelativePath = './jsx/importAudio.jsx';
+        const jsxFullPath = path.resolve(__dirname, jsxRelativePath);
     
         const script = `
             try {
-                $.writeln("Attempting to load file from: " + "${jsxFilePath}");
-                $.evalFile("${jsxFilePath}");
-                var result = importAudioToTrack("${filePath.replace(/\\/g, '\\\\')}", ${track}, ${volume});
-                $.writeln('Success: ' + result);
-                result; // Ensure result is returned
+                var jsxFile = new File("${jsxFullPath.replace(/\\/g, '\\\\')}");
+                $.writeln("Attempting to load file from: " + jsxFile.fsName);
+    
+                if (jsxFile.exists) {
+                    $.evalFile(jsxFile);
+                    var result = importAudioToTrack("${filePath.replace(/\\/g, '\\\\')}", ${track}, ${volume});
+                    $.writeln('Success: ' + result);
+                    result;
+                } else {
+                    throw new Error("JSX file not found at: " + jsxFile.fsName);
+                }
             } catch(e) {
-                $.writeln('Error: ' + e.toString() + ' | Full path attempted: ' + "${jsxFilePath}");
-                e.toString(); // Return error message
+                $.writeln('Error: ' + e.toString());
+                e.toString();
             }
         `;
     

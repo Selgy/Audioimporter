@@ -1,7 +1,6 @@
 import { CEP_Config } from "vite-cep-plugin";
 import { version } from "./package.json";
 
-
 const config: CEP_Config = {
   version,
   id: "com.AudioImporterV2.cep",
@@ -57,9 +56,13 @@ const config: CEP_Config = {
   },
   installModules: [],
   copyAssets: [
-    "./target/release/audio_importer.exe", 
+    "./target/release/audio_importer.exe",
+    "./js",
+    "./jsx",
   ],
+
 
   copyZipAssets: [],
 };
+
 export default config;
