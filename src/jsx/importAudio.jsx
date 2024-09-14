@@ -102,18 +102,28 @@ function importAudioToTrack(filePath, initialTrackIndex, volume, pitch, debugMod
             throw new Error("Failed to insert clip - " + insertError.toString());
         }
 
-        // Search for the newly added clip, starting from the intended track
-        var finalAudioTrackIndex = intendedTrackIndex;
+        // Search for the newly added clip
         var foundClip;
-        for (var i = intendedTrackIndex; i < sequence.audioTracks.numTracks; i++) {
+        var finalAudioTrackIndex;
+        var searchStartTime = new Time();
+        searchStartTime.seconds = Math.max(0, insertTime.seconds - 0.1); // Start searching slightly before insert time
+        var searchEndTime = new Time();
+        searchEndTime.seconds = insertTime.seconds + 0.1; // End searching slightly after insert time
+
+        for (var i = 0; i < sequence.audioTracks.numTracks; i++) {
             var track = sequence.audioTracks[i];
-            var lastClip = track.clips[track.clips.numItems - 1];
-            if (lastClip && lastClip.name === importedItem.name && Math.abs(lastClip.start.seconds - insertTime.seconds) < 0.1) {
-                finalAudioTrackIndex = i;
-                foundClip = lastClip;
-                addDebugMessage("Debug 14: Found newly inserted clip on track " + (finalAudioTrackIndex + 1));
-                break;
+            for (var j = 0; j < track.clips.numItems; j++) {
+                var clip = track.clips[j];
+                if (clip.name === importedItem.name &&
+                    clip.start.seconds >= searchStartTime.seconds &&
+                    clip.start.seconds <= searchEndTime.seconds) {
+                    foundClip = clip;
+                    finalAudioTrackIndex = i;
+                    addDebugMessage("Debug 14: Found newly inserted clip on track " + (finalAudioTrackIndex + 1));
+                    break;
+                }
             }
+            if (foundClip) break;
         }
 
         if (!foundClip) {
@@ -141,7 +151,7 @@ function importAudioToTrack(filePath, initialTrackIndex, volume, pitch, debugMod
             
             addDebugMessage("Debug 18: Attempting to apply pitch shift");
             if (pitch !== undefined && pitch !== null) {
-                applyPitchShifterToSelected(); // Apply pitch shifter to selected clip(s)
+                applyPitchShifterToImportedAudio(foundClip, pitch);
                 addDebugMessage("Debug 19: Pitch shift applied");
             } else {
                 addDebugMessage("Debug 19a: Skipping pitch shift - pitch value is undefined or null");
@@ -178,7 +188,6 @@ function importAudioToTrack(filePath, initialTrackIndex, volume, pitch, debugMod
         };
     }
 }
-
 
 // Helper functions
 
