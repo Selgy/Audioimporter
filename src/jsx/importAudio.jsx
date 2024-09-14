@@ -206,7 +206,7 @@ function setClipVolume(clip, volumeDb) {
     }
 }
 
-function applyPitchShifterToSelected() {
+function applyPitchShifterToImportedAudio(foundClip, pitch) {
     var debugLog = "Debug Log:\n";
 
     function addDebugMessage(message) {
@@ -224,11 +224,10 @@ function applyPitchShifterToSelected() {
         }
         addDebugMessage("Step 2: Active sequence found");
 
-        var selectedClips = sequence.getSelection();
-        if (selectedClips.length === 0) {
-            throw new Error("No clips selected.");
+        if (!foundClip) {
+            throw new Error("No imported clip provided.");
         }
-        addDebugMessage("Step 3: " + selectedClips.length + " clip(s) selected.");
+        addDebugMessage("Step 3: Imported clip found: " + foundClip.name);
 
         var sequenceQE = qe.project.getActiveSequence();
         if (!sequenceQE) {
@@ -236,76 +235,54 @@ function applyPitchShifterToSelected() {
         }
         addDebugMessage("Step 4: QE sequence retrieved");
 
-        addDebugMessage("Step 5: Total audio tracks: " + sequenceQE.numAudioTracks);
+        // Find the corresponding QE clip
+        var clipQE = findQEClip(sequenceQE, foundClip);
+        if (!clipQE) {
+            throw new Error("Unable to find the imported clip in QE sequence.");
+        }
+        addDebugMessage("Step 5: Corresponding QE clip found");
 
-        var addedCount = 0;
-        for (var j = 0; j < sequenceQE.numAudioTracks; j++) {
-            addDebugMessage("Step 6: Checking audio track " + j);
-            
+        if (!clipHasPitchShifter(clipQE)) {
             try {
-                var audioTrack = sequenceQE.getAudioTrackAt(j);
-                if (!audioTrack) {
-                    addDebugMessage("Warning: Unable to access audio track " + j);
-                    continue;
+                var effect = qe.project.getAudioEffectByName("Pitch Shifter");
+                if (!effect) {
+                    throw new Error("Pitch Shifter effect not found");
                 }
+                clipQE.addAudioEffect(effect);
+                addDebugMessage("Step 6: Pitch Shifter effect applied to " + clipQE.name);
 
-                addDebugMessage("Step 7: Audio track " + j + " accessed, items: " + audioTrack.numItems);
-
-                for (var k = 0; k < audioTrack.numItems; k++) {
-                    try {
-                        var clipQE = audioTrack.getItemAt(k);
-                        if (!clipQE) {
-                            addDebugMessage("Warning: Unable to access clip " + k + " on track " + j);
-                            continue;
-                        }
-
-                        addDebugMessage("Step 8: Checking clip: " + clipQE.name);
-
-                        if (isClipSelected(clipQE, selectedClips)) {
-                            addDebugMessage("Step 9: Matching clip found");
-
-                            if (!clipHasPitchShifter(clipQE)) {
-                                try {
-                                    var effect = qe.project.getAudioEffectByName("Pitch Shifter");
-                                    if (!effect) {
-                                        throw new Error("Pitch Shifter effect not found");
-                                    }
-                                    clipQE.addAudioEffect(effect);
-                                    addedCount++;
-                                    addDebugMessage("Step 10: Pitch Shifter effect applied to " + clipQE.name);
-                                } catch (effectError) {
-                                    addDebugMessage("Error adding Pitch Shifter to clip: " + effectError.toString());
-                                }
-                            } else {
-                                addDebugMessage("Step 10: Pitch Shifter effect already exists on " + clipQE.name);
-                            }
-                        }
-                    } catch (clipError) {
-                        addDebugMessage("Error processing clip: " + clipError.toString());
-                    }
-                }
-            } catch (trackError) {
-                addDebugMessage("Error processing track " + j + ": " + trackError.toString());
+                // Set the pitch value
+                setPitchValue(clipQE, pitch);
+                addDebugMessage("Step 7: Pitch value set to " + pitch);
+            } catch (effectError) {
+                addDebugMessage("Error adding Pitch Shifter to clip: " + effectError.toString());
             }
+        } else {
+            addDebugMessage("Step 6: Pitch Shifter effect already exists on " + clipQE.name);
         }
 
-        addDebugMessage("Pitch Shifter added to " + addedCount + " selected audio clip(s).");
     } catch (error) {
-        addDebugMessage("Error in applyPitchShifterToSelected: " + error.toString());
+        addDebugMessage("Error in applyPitchShifterToImportedAudio: " + error.toString());
     }
 
     // Display the full debug log
     alert("Pitch Shifter Debug Log:\n" + debugLog);
 }
 
-function isClipSelected(clipQE, selectedClips) {
-    for (var i = 0; i < selectedClips.length; i++) {
-        if (clipQE.name === selectedClips[i].name && 
-            Math.abs(clipQE.start.ticks - selectedClips[i].start.ticks) < 100) {
-            return true;
+function findQEClip(sequenceQE, foundClip) {
+    for (var i = 0; i < sequenceQE.numAudioTracks; i++) {
+        var audioTrack = sequenceQE.getAudioTrackAt(i);
+        if (audioTrack) {
+            for (var j = 0; j < audioTrack.clips.numItems; j++) {
+                var clipQE = audioTrack.clips[j];
+                if (clipQE && clipQE.name === foundClip.name && 
+                    Math.abs(clipQE.start.ticks - foundClip.start.ticks) < 100) {
+                    return clipQE;
+                }
+            }
         }
     }
-    return false;
+    return null;
 }
 
 function clipHasPitchShifter(clip) {
@@ -318,6 +295,20 @@ function clipHasPitchShifter(clip) {
     return false;
 }
 
+function setPitchValue(clipQE, pitch) {
+    for (var i = 0; i < clipQE.components.numItems; i++) {
+        var component = clipQE.components[i];
+        if (component.displayName === "Pitch Shifter") {
+            for (var j = 0; j < component.properties.numItems; j++) {
+                var property = component.properties[j];
+                if (property.displayName === "Semitones") {
+                    property.setValue(pitch, true);
+                    return;
+                }
+            }
+        }
+    }
+}
 
 
 
