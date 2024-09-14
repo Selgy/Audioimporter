@@ -141,8 +141,8 @@ function importAudioToTrack(filePath, initialTrackIndex, volume, pitch, debugMod
             
             addDebugMessage("Debug 18: Attempting to apply pitch shift");
             if (pitch !== undefined && pitch !== null) {
-                setPitchShifter(foundClip, pitch);
-                addDebugMessage("Debug 19: Pitch shift applied with value: " + pitch);
+                applyPitchShifterToSelected(); // Apply pitch shifter to selected clip(s)
+                addDebugMessage("Debug 19: Pitch shift applied");
             } else {
                 addDebugMessage("Debug 19a: Skipping pitch shift - pitch value is undefined or null");
             }
@@ -155,16 +155,16 @@ function importAudioToTrack(filePath, initialTrackIndex, volume, pitch, debugMod
             throw audioError;
         }
 
-            // At the end of the function, add this alert:
-            alert("Import Audio Debug Log:\n" + debugLog);
+        // At the end of the function, add this alert:
+        alert("Import Audio Debug Log:\n" + debugLog);
 
-            return {
-                success: true,
-                message: "Audio imported successfully",
-                trackIndex: finalAudioTrackIndex + 1,
-                clipName: foundClip.name,
-                debugLog: debugLog
-            };
+        return {
+            success: true,
+            message: "Audio imported successfully",
+            trackIndex: finalAudioTrackIndex + 1,
+            clipName: foundClip.name,
+            debugLog: debugLog
+        };
 
     } catch (e) {
         addDebugMessage("Fatal Error in importAudioToTrack: " + e.toString());
@@ -178,6 +178,7 @@ function importAudioToTrack(filePath, initialTrackIndex, volume, pitch, debugMod
         };
     }
 }
+
 
 // Helper functions
 
@@ -205,88 +206,116 @@ function setClipVolume(clip, volumeDb) {
     }
 }
 
-function applyPitchShifter(clip, pitchValue) {
-    var pitchDebugLog = "Pitch Shifter Debug Log:\n";
+function applyPitchShifterToSelected() {
+    var debugLog = "Debug Log:\n";
+
+    function addDebugMessage(message) {
+        debugLog += message + "\n";
+        $.writeln(message);  // Write to ExtendScript Toolkit console
+    }
 
     try {
-        if (!clip) {
-            throw new Error("No selected clip found");
+        app.enableQE();
+        addDebugMessage("Step 1: QE enabled");
+
+        var sequence = app.project.activeSequence;
+        if (!sequence) {
+            throw new Error("No active sequence found.");
         }
+        addDebugMessage("Step 2: Active sequence found");
 
-        pitchDebugLog += "Clip found\n";
+        var selectedClips = sequence.getSelection();
+        if (selectedClips.length === 0) {
+            throw new Error("No clips selected.");
+        }
+        addDebugMessage("Step 3: " + selectedClips.length + " clip(s) selected.");
 
-        // Check if the clip already has a Pitch Shifter effect
-        var pitchShifterComponent = null;
-        for (var i = 0; i < clip.components.numItems; i++) {
-            if (clip.components[i].displayName === "Pitch Shifter") {
-                pitchShifterComponent = clip.components[i];
-                break;
+        var sequenceQE = qe.project.getActiveSequence();
+        if (!sequenceQE) {
+            throw new Error("Unable to access QE sequence.");
+        }
+        addDebugMessage("Step 4: QE sequence retrieved");
+
+        addDebugMessage("Step 5: Total audio tracks: " + sequenceQE.numAudioTracks);
+
+        var addedCount = 0;
+        for (var j = 0; j < sequenceQE.numAudioTracks; j++) {
+            addDebugMessage("Step 6: Checking audio track " + j);
+            
+            try {
+                var audioTrack = sequenceQE.getAudioTrackAt(j);
+                if (!audioTrack) {
+                    addDebugMessage("Warning: Unable to access audio track " + j);
+                    continue;
+                }
+
+                addDebugMessage("Step 7: Audio track " + j + " accessed, items: " + audioTrack.numItems);
+
+                for (var k = 0; k < audioTrack.numItems; k++) {
+                    try {
+                        var clipQE = audioTrack.getItemAt(k);
+                        if (!clipQE) {
+                            addDebugMessage("Warning: Unable to access clip " + k + " on track " + j);
+                            continue;
+                        }
+
+                        addDebugMessage("Step 8: Checking clip: " + clipQE.name);
+
+                        if (isClipSelected(clipQE, selectedClips)) {
+                            addDebugMessage("Step 9: Matching clip found");
+
+                            if (!clipHasPitchShifter(clipQE)) {
+                                try {
+                                    var effect = qe.project.getAudioEffectByName("Pitch Shifter");
+                                    if (!effect) {
+                                        throw new Error("Pitch Shifter effect not found");
+                                    }
+                                    clipQE.addAudioEffect(effect);
+                                    addedCount++;
+                                    addDebugMessage("Step 10: Pitch Shifter effect applied to " + clipQE.name);
+                                } catch (effectError) {
+                                    addDebugMessage("Error adding Pitch Shifter to clip: " + effectError.toString());
+                                }
+                            } else {
+                                addDebugMessage("Step 10: Pitch Shifter effect already exists on " + clipQE.name);
+                            }
+                        }
+                    } catch (clipError) {
+                        addDebugMessage("Error processing clip: " + clipError.toString());
+                    }
+                }
+            } catch (trackError) {
+                addDebugMessage("Error processing track " + j + ": " + trackError.toString());
             }
         }
 
-        // If no Pitch Shifter is found, add it
-        if (!pitchShifterComponent) {
-            pitchDebugLog += "No Pitch Shifter effect found, adding it\n";
-
-            // Get Pitch Shifter effect from the audio effect library
-            var pitchShifterEffect = app.project.getAudioEffectByName("Pitch Shifter");
-            if (!pitchShifterEffect) {
-                throw new Error("Pitch Shifter effect not found in Premiere");
-            }
-
-            // Add the Pitch Shifter effect to the clip
-            pitchShifterComponent = clip.addComponent(pitchShifterEffect);
-            if (!pitchShifterComponent) {
-                throw new Error("Failed to add Pitch Shifter effect");
-            }
-            pitchDebugLog += "Pitch Shifter effect added successfully\n";
-        }
-
-        // Adjust the Transpose property of the Pitch Shifter effect
-        var transposeProperty = null;
-        for (var j = 0; j < pitchShifterComponent.properties.numItems; j++) {
-            if (pitchShifterComponent.properties[j].displayName === "Transpose") {
-                transposeProperty = pitchShifterComponent.properties[j];
-                break;
-            }
-        }
-
-        if (!transposeProperty) {
-            throw new Error("Transpose property not found in Pitch Shifter effect");
-        }
-
-        // Convert semitones to transpose ratio (mapping from your old script)
-        var semitonesToRatio = {
-            12: 1, 11: 0.9251657128334, 10: 0.8545315861702, 9: 0.78786188364029,
-            8: 0.72493404150009, 7: 0.66553807258606, 6: 0.60947567224503,
-            5: 0.55655986070633, 4: 0.5066140294075, 3: 0.45947137475014,
-            2: 0.41497468948364, 1: 0.37297543883324, 0: 0.33333334326744,
-            "-1": 0.29591619968414, "-2": 0.26059913635254, "-3": 0.22726428508759,
-            "-4": 0.19580034911633, "-5": 0.16610236465931, "-6": 0.13807117938995,
-            "-7": 0.11161327362061, "-8": 0.08664035797119, "-9": 0.06306902319193,
-            "-10": 0.04082067683339, "-11": 0.0198210477829, "-12": 0
-        };
-
-        // Ensure the pitch value is mapped correctly
-        var transposeRatio = semitonesToRatio[pitchValue];
-        if (transposeRatio === undefined) {
-            throw new Error("Invalid pitch value");
-        }
-
-        // Set the Transpose property to the correct value
-        transposeProperty.setValue(transposeRatio, true);
-        pitchDebugLog += "Pitch Shifter Transpose set to " + transposeRatio + "\n";
-
-        // Final success message
-        alert("Pitch Shifter applied successfully. Debug log:\n" + pitchDebugLog);
-
-    } catch (e) {
-        pitchDebugLog += "Error in applyPitchShifter: " + e.toString() + "\n";
-        if (e.stack) {
-            pitchDebugLog += "Stack trace: " + e.stack + "\n";
-        }
-        alert("Error in applyPitchShifter: " + e.toString() + "\n\nDebug log:\n" + pitchDebugLog);
+        addDebugMessage("Pitch Shifter added to " + addedCount + " selected audio clip(s).");
+    } catch (error) {
+        addDebugMessage("Error in applyPitchShifterToSelected: " + error.toString());
     }
+
+    // Display the full debug log
+    alert("Pitch Shifter Debug Log:\n" + debugLog);
+}
+
+function isClipSelected(clipQE, selectedClips) {
+    for (var i = 0; i < selectedClips.length; i++) {
+        if (clipQE.name === selectedClips[i].name && 
+            Math.abs(clipQE.start.ticks - selectedClips[i].start.ticks) < 100) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function clipHasPitchShifter(clip) {
+    for (var i = 0; i < clip.numComponents; i++) {
+        var effect = clip.getComponentAt(i);
+        if (effect.name === "Pitch Shifter") {
+            return true;
+        }
+    }
+    return false;
 }
 
 
