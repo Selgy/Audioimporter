@@ -98,60 +98,29 @@ function importAudioToTrack(filePath, initialTrackIndex, volume, pitch, debugMod
                 throw new Error("insertClip returned null or undefined");
             }
             addDebugMessage("Debug 13: Clip inserted");
+
+
+        var selectionResult = selectClipUsingQE(intendedTrackIndex, insertTime, addDebugMessage);
+
+        if (!selectionResult.success) {
+            throw new Error("Clip selection failed: " + selectionResult.message);
+        }
+        addDebugMessage("Debug 14: Clip time range selected successfully");
+
         } catch (insertError) {
             throw new Error("Failed to insert clip - " + insertError.toString());
-        }
-
-        // Search for the newly added clip
-        var foundClip;
-        var finalAudioTrackIndex;
-        var searchStartTime = new Time();
-        searchStartTime.seconds = Math.max(0, insertTime.seconds - 0.1); // Start searching slightly before insert time
-        var searchEndTime = new Time();
-        searchEndTime.seconds = insertTime.seconds + 0.1; // End searching slightly after insert time
-
-        for (var i = 0; i < sequence.audioTracks.numTracks; i++) {
-            var track = sequence.audioTracks[i];
-            for (var j = 0; j < track.clips.numItems; j++) {
-                var clip = track.clips[j];
-                if (clip.name === importedItem.name &&
-                    clip.start.seconds >= searchStartTime.seconds &&
-                    clip.start.seconds <= searchEndTime.seconds) {
-                    foundClip = clip;
-                    finalAudioTrackIndex = i;
-                    addDebugMessage("Debug 14: Found newly inserted clip on track " + (finalAudioTrackIndex + 1));
-                    break;
-                }
-            }
-            if (foundClip) break;
-        }
-
-        if (!foundClip) {
-            throw new Error("Unable to find the newly inserted clip");
-        }
-
-        addDebugMessage("Debug 15: Final audio track index: " + (finalAudioTrackIndex + 1));
-
-        if (finalAudioTrackIndex !== intendedTrackIndex) {
-            addDebugMessage("Warning: Clip was placed on track " + (finalAudioTrackIndex + 1) + " instead of intended track " + (intendedTrackIndex + 1));
-        }
-
-        try {
-            sequence.setSelection([foundClip]);
-            addDebugMessage("Debug 16: Clip selection successful");
-        } catch (selectionError) {
-            addDebugMessage("Debug Error: Clip selection failed - " + selectionError.toString());
         }
 
         addDebugMessage("Debug 17a: Received pitch value: " + pitch);
 
         try {
-            setClipVolume(foundClip, volume);
+            $.sleep(100);  // Wait for the clip to be fully inserted
+            setClipVolume(volume, addDebugMessage);
             addDebugMessage("Debug 17: Clip volume set to " + volume + " dB");
             
             addDebugMessage("Debug 18: Attempting to apply pitch shift");
             if (pitch !== undefined && pitch !== null) {
-                applyPitchShifterToImportedAudio(foundClip, pitch);
+                applyPitchShifterToImportedAudio(pitch, addDebugMessage);  // Pass addDebugMessage here
                 addDebugMessage("Debug 19: Pitch shift applied");
             } else {
                 addDebugMessage("Debug 19a: Skipping pitch shift - pitch value is undefined or null");
@@ -165,14 +134,15 @@ function importAudioToTrack(filePath, initialTrackIndex, volume, pitch, debugMod
             throw audioError;
         }
 
+
         // At the end of the function, add this alert:
         alert("Import Audio Debug Log:\n" + debugLog);
 
         return {
             success: true,
             message: "Audio imported successfully",
-            trackIndex: finalAudioTrackIndex + 1,
-            clipName: foundClip.name,
+            trackIndex: intendedTrackIndex + 1,
+            clipName: newClip.name,
             debugLog: debugLog
         };
 
@@ -181,6 +151,8 @@ function importAudioToTrack(filePath, initialTrackIndex, volume, pitch, debugMod
         if (e.stack) {
             addDebugMessage("Error stack: " + e.stack);
         }
+        // Add an alert to show the error and debug log
+        alert("Error occurred in importAudioToTrack:\n" + e.toString() + "\n\nDebug Log:\n" + debugLog);
         return {
             success: false,
             message: "Error in importAudioToTrack: " + e.toString(),
@@ -189,13 +161,90 @@ function importAudioToTrack(filePath, initialTrackIndex, volume, pitch, debugMod
     }
 }
 
-// Helper functions
 
-function setClipVolume(clip, volumeDb) {
+
+
+
+function selectClipUsingQE(trackIndex, startTime, addDebugMessage) {
     try {
-        if (!clip) {
-            throw new Error("Clip is undefined");
+        var sequence = app.project.activeSequence;
+        if (!sequence) {
+            throw new Error("No active sequence found.");
         }
+        addDebugMessage("Step 1: Active sequence found");
+
+        var track = sequence.audioTracks[trackIndex];
+        if (!track) {
+            throw new Error("Audio track not found at index " + trackIndex);
+        }
+        addDebugMessage("Step 2: Audio track found at index " + trackIndex);
+
+        // Find the clip using the standard DOM
+        var clipFound = false;
+        for (var i = 0; i < track.clips.numItems; i++) {
+            var clip = track.clips[i];
+            if (Math.abs(clip.start.seconds - startTime.seconds) < 0.1) { // 0.1 second tolerance
+                clipFound = true;
+                addDebugMessage("Step 3: Matching clip found");
+                
+                // Select the clip directly
+                app.project.activeSequence.setSelection([clip]);
+                addDebugMessage("Step 4: Clip directly selected");
+                
+                return { success: true, message: "Clip directly selected", trackIndex: trackIndex, clip: clip };
+            }
+        }
+
+        if (!clipFound) {
+            throw new Error("No matching clip found at the specified time");
+        }
+
+    } catch (e) {
+        addDebugMessage("Error in selectClipUsingQE: " + e.toString());
+        return { success: false, message: e.toString() };
+    }
+}
+
+
+function selectClipAlternative(sequenceQE, trackIndex, clipQE, addDebugMessage) {
+    try {
+        // Alternative selection method using sequence.setSelection()
+        var startTime = clipQE.start;
+        var endTime = clipQE.end;
+        sequenceQE.setSelection(startTime, endTime);
+        addDebugMessage("Clip selected using alternative method");
+        return { success: true, message: "Clip selected using alternative method", trackIndex: trackIndex + 1 };
+    } catch (altSelectionError) {
+        addDebugMessage("Error in alternative clip selection: " + altSelectionError.toString());
+        return { success: false, message: "Failed to select clip using alternative method" };
+    }
+}
+
+
+
+
+
+
+function setClipVolume(volumeDb, addDebugMessage) {
+    try {
+        var sequence = app.project.activeSequence;
+        if (!sequence) {
+            throw new Error("No active sequence found");
+        }
+        
+        var selectedClips = sequence.getSelection();
+        if (!selectedClips || selectedClips.length === 0) {
+            throw new Error("No clip selected");
+        }
+        
+        var clip = selectedClips[0];
+        if (!clip) {
+            throw new Error("Selected clip is undefined");
+        }
+        
+        addDebugMessage("Setting volume for clip: " + clip.name);
+        
+        // Iterate through components to find the audio component
         for (var i = 0; i < clip.components.numItems; i++) {
             var component = clip.components[i];
             if (component.displayName === "Volume") {
@@ -204,90 +253,103 @@ function setClipVolume(clip, volumeDb) {
                     if (property.displayName === "Level") {
                         var volumeInDec = dbToDecibel(volumeDb);
                         property.setValue(volumeInDec, true);
+                        addDebugMessage("Volume set successfully to " + volumeDb + " dB");
                         return;
                     }
                 }
             }
         }
-        throw new Error("Volume property not found");
+        
+        throw new Error("Volume property not found on clip");
     } catch (e) {
-        throw new Error("Error in setClipVolume: " + e.toString());
+        addDebugMessage("Error in setClipVolume: " + e.toString());
+        throw e;
     }
 }
 
-function applyPitchShifterToImportedAudio(foundClip, pitch) {
-    var debugLog = "Debug Log:\n";
+function dbToDecibel(x) {
+    return Math.pow(10, (x - 15) / 20);
+}
 
-    function addDebugMessage(message) {
-        debugLog += message + "\n";
-        $.writeln(message);  // Write to ExtendScript Toolkit console
-    }
-
+function applyPitchShifterToImportedAudio(pitch, addDebugMessage) {
     try {
-        app.enableQE();
-        addDebugMessage("Step 1: QE enabled");
-
         var sequence = app.project.activeSequence;
         if (!sequence) {
-            throw new Error("No active sequence found.");
+            throw new Error("No active sequence found");
         }
-        addDebugMessage("Step 2: Active sequence found");
 
-        if (!foundClip) {
-            throw new Error("No imported clip provided.");
+        var selectedClips = sequence.getSelection();
+        if (!selectedClips || selectedClips.length === 0) {
+            throw new Error("No clip selected");
         }
-        addDebugMessage("Step 3: Imported clip found: " + foundClip.name);
 
-        var sequenceQE = qe.project.getActiveSequence();
-        if (!sequenceQE) {
-            throw new Error("Unable to access QE sequence.");
+        var clip = selectedClips[0];
+        if (!clip) {
+            throw new Error("Selected clip is undefined");
         }
-        addDebugMessage("Step 4: QE sequence retrieved");
 
-        // Find the corresponding QE clip
-        var clipQE = findQEClip(sequenceQE, foundClip);
-        if (!clipQE) {
-            throw new Error("Unable to find the imported clip in QE sequence.");
+        addDebugMessage("Applying pitch shifter to clip: " + clip.name);
+
+        // Get the QE sequence
+        var qeSequence = qe.project.getActiveSequence();
+        if (!qeSequence) {
+            throw new Error("QE sequence not found");
         }
-        addDebugMessage("Step 5: Corresponding QE clip found");
 
-        if (!clipHasPitchShifter(clipQE)) {
-            try {
-                var effect = qe.project.getAudioEffectByName("Pitch Shifter");
-                if (!effect) {
-                    throw new Error("Pitch Shifter effect not found");
-                }
-                clipQE.addAudioEffect(effect);
-                addDebugMessage("Step 6: Pitch Shifter effect applied to " + clipQE.name);
+        addDebugMessage("QE sequence found");
 
-                // Set the pitch value
-                setPitchValue(clipQE, pitch);
-                addDebugMessage("Step 7: Pitch value set to " + pitch);
-            } catch (effectError) {
-                addDebugMessage("Error adding Pitch Shifter to clip: " + effectError.toString());
-            }
+        // Find the QE clip
+        var qeClip = findQEClip(qeSequence, clip);
+        if (!qeClip) {
+            throw new Error("QE clip not found");
+        }
+
+        addDebugMessage("QE clip found");
+
+        // Debugging: Log clip components to see if Pitch Shifter is already present
+        addDebugMessage("Checking clip components:");
+        for (var i = 0; i < qeClip.numComponents; i++) {
+            var component = qeClip.getComponentAt(i);
+            addDebugMessage("Component " + i + ": " + component.name);
+        }
+
+        // Apply the Pitch Shifter effect as an audio effect, not a video effect
+        if (!clipHasPitchShifter(qeClip)) {
+            alert("Adding Pitch Shifter as an audio effect"); // Debugging log for effect addition
+            qeClip.addAudioEffect(qe.project.getAudioEffectByName("Pitch Shifter"));
+            addDebugMessage("Pitch Shifter effect added");
         } else {
-            addDebugMessage("Step 6: Pitch Shifter effect already exists on " + clipQE.name);
+            addDebugMessage("Pitch Shifter already exists on clip");
         }
 
-    } catch (error) {
-        addDebugMessage("Error in applyPitchShifterToImportedAudio: " + error.toString());
-    }
+        // Set the pitch value
+        alert("Setting pitch value to: " + pitch); // Debugging for pitch value setting
+        setPitchValue(qeClip, pitch);
 
-    // Display the full debug log
-    alert("Pitch Shifter Debug Log:\n" + debugLog);
+        addDebugMessage("Pitch Shifter effect set to " + pitch + " semitones");
+
+    } catch (e) {
+        var errorMessage = "Error in applyPitchShifterToImportedAudio: " + e.toString();
+        if (e.stack) {
+            errorMessage += "\nStack trace: " + e.stack;
+        }
+
+        addDebugMessage(errorMessage);
+        alert(errorMessage);  // Display detailed error message
+        throw e;  // Rethrow the error so it's logged properly
+    }
 }
 
-function findQEClip(sequenceQE, foundClip) {
-    for (var i = 0; i < sequenceQE.numAudioTracks; i++) {
-        var audioTrack = sequenceQE.getAudioTrackAt(i);
-        if (audioTrack) {
-            for (var j = 0; j < audioTrack.clips.numItems; j++) {
-                var clipQE = audioTrack.clips[j];
-                if (clipQE && clipQE.name === foundClip.name && 
-                    Math.abs(clipQE.start.ticks - foundClip.start.ticks) < 100) {
-                    return clipQE;
-                }
+
+
+
+function findQEClip(sequenceQE, clip) {
+    for (var i = 0; i < sequenceQE.numVideoTracks; i++) {
+        var track = sequenceQE.getVideoTrackAt(i);
+        for (var j = 0; j < track.numItems; j++) {
+            var qeClip = track.getItemAt(j);
+            if (qeClip.name === clip.name && Math.abs(qeClip.start.ticks - clip.start.ticks) < 1) {
+                return qeClip;
             }
         }
     }
@@ -304,16 +366,14 @@ function clipHasPitchShifter(clip) {
     return false;
 }
 
-function setPitchValue(clipQE, pitch) {
-    for (var i = 0; i < clipQE.components.numItems; i++) {
-        var component = clipQE.components[i];
-        if (component.displayName === "Pitch Shifter") {
-            for (var j = 0; j < component.properties.numItems; j++) {
-                var property = component.properties[j];
-                if (property.displayName === "Semitones") {
-                    property.setValue(pitch, true);
-                    return;
-                }
+function setPitchValue(clip, pitch) {
+    for (var i = 0; i < clip.numComponents; i++) {
+        var effect = clip.getComponentAt(i);
+        if (effect.name === "Pitch Shifter") {
+            var pitchProperty = effect.properties.getParamForDisplayName("Semitones");
+            if (pitchProperty) {
+                pitchProperty.setValue(pitch, true);
+                return;
             }
         }
     }
@@ -356,9 +416,6 @@ function semitonesToTransposeRatio(semitones) {
 }
 
 
-function dbToDecibel(x) {
-    return Math.pow(10, (x - 15) / 20);
-}
 
 
 
