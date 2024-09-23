@@ -29,17 +29,21 @@ const Main: React.FC = () => {
     useEffect(() => {
         console.log('useEffect hook is running');
         startWebSocketConnection();
-        
+        if (socketRef.current) {
+            console.log(`WebSocket ready state: ${socketRef.current.readyState}`);
+        }
         return () => {
             if (socketRef.current) {
                 socketRef.current.close();
             }
         };
     }, []);
+    
 
     useEffect(() => {
         if (socketRef.current) {
             socketRef.current.onmessage = (event) => {
+                console.log('Received message from server:', event.data);
                 const data = event.data;
                 appendToDebugLog(`Received message: ${data}`);
                 
@@ -73,16 +77,10 @@ const Main: React.FC = () => {
             appendToDebugLog("Connected to Rust server");
             loadConfig(); // Load config after connection is established
         };
-        
+    
         socketRef.current.onmessage = (event) => {
             const data = event.data;
             appendToDebugLog(`Received message: ${data}`);
-            
-            if (typeof data === 'string' && data.startsWith("CONFIG:")) {
-                const configData = JSON.parse(data.replace("CONFIG:", ""));
-                setConfig(configData);
-                appendToDebugLog('Config loaded successfully from server');
-            }
         };
     
         socketRef.current.onerror = (error: Event) => {
@@ -91,8 +89,10 @@ const Main: React.FC = () => {
     
         socketRef.current.onclose = (event: CloseEvent) => {
             appendToDebugLog(`Disconnected from Rust server: ${event.reason}`);
-            // Attempt to reconnect after a delay
-            setTimeout(startWebSocketConnection, 5000);
+            setTimeout(() => {
+                appendToDebugLog('Attempting to reconnect...');
+                startWebSocketConnection();
+            }, 5000);
         };
     }, []);
     
@@ -130,6 +130,7 @@ const Main: React.FC = () => {
             }
         }
     };
+    
 
     const handleCombo = (combo: string) => {
         const sortedCombo = combo.split('+').sort().join('+');
@@ -166,6 +167,7 @@ const Main: React.FC = () => {
                 };
                 appendToDebugLog(`New config before saving: ${JSON.stringify(newConfig)}`);
                 saveConfig(newConfig);
+                reloadConfig(); // Reload the config after saving
                 appendToDebugLog(`Key binding ${sortedCombination} added to config.`);
                 stopListening(); // Stop listening after a keybind is successfully added
                 // Clear the WebSocket message handler for combo
@@ -239,6 +241,7 @@ const Main: React.FC = () => {
                     appendToDebugLog(`File selected: ${file.name}`);
                     const filePath = (file as any).path || file.name;
                     appendToDebugLog(`File path resolved to: ${filePath}`);
+                    // Update the config with the selected file path
                     updateBinding(key, { ...config[key], path: filePath });
                     appendToDebugLog(`Selected audio file for ${key}: ${filePath}`);
                 } else {
@@ -249,19 +252,26 @@ const Main: React.FC = () => {
             appendToDebugLog(`File input reference is not available.`);
         }
     };
-
     
 
+    
     const updateBinding = (key: string, value: AudioBinding) => {
-        console.log('Updating binding with pitch:', value.pitch); // Add this log to check the pitch value
+        console.log('Updating binding with value:', value); // Add this log to check the value
         setConfig((prevConfig: Config) => {
             const newConfig = { ...prevConfig, [key]: value };
             appendToDebugLog(`Updating config for key: ${key} with value: ${JSON.stringify(value)}`);
+            
+            saveConfig(newConfig); // Save the updated configuration to the server
+            reloadConfig(); // Reload the config after saving
             return newConfig;
         });
     };
     
-
+    
+    const reloadConfig = () => {
+        appendToDebugLog("Requesting latest config from server...");
+        socketRef.current?.send('LOAD_CONFIG');
+    };
 
     
     const deleteBinding = (key: string) => {
@@ -269,6 +279,7 @@ const Main: React.FC = () => {
             const { [key]: _, ...newConfig } = prevConfig;
             appendToDebugLog(`Deleting binding for key: ${key}`);
             saveConfig(newConfig);
+            reloadConfig(); // Reload the config after saving
             appendToDebugLog(`Binding deleted for ${key}`);
             return newConfig;
         });
