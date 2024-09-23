@@ -11,11 +11,15 @@ function startRustServer() {
         const extensionRoot = getExtensionRootPath();
         console.log('Extension root path:', extensionRoot);
 
-        // Construct the path to the Rust executable
-        const rustExecutablePath = path.join(extensionRoot, 'target', 'release', 'audio_importer.exe');
-        console.log('Rust executable path:', rustExecutablePath);
+        // Correcting the path construction
+        let rustExecutablePath = path.join(extensionRoot, 'target', 'release', 'audio_importer.exe');
 
-        // Check if the file exists
+        // Normalize the path and remove any 'file:' prefix
+        rustExecutablePath = rustExecutablePath.replace('file:\\', ''); // Remove file: prefix for Windows path
+        rustExecutablePath = path.normalize(rustExecutablePath); // Normalize the path
+        console.log('Corrected Rust executable path:', rustExecutablePath);
+
+        // Check if the file exists at the normalized path
         if (!fs.existsSync(rustExecutablePath)) {
             console.error(`Rust executable not found at ${rustExecutablePath}`);
             return;
@@ -54,5 +58,3 @@ function getExtensionRootPath() {
 
 console.log("Background script loaded. Starting Rust server...");
 startRustServer();
-
-// Add any other background tasks or message listeners here
