@@ -36,7 +36,7 @@ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
         <AutoVisible>true</AutoVisible>
       </Lifecycle>
       <UI>
-        <Type>ModalDialog</Type>
+        <Type>Modeless</Type>
         <Menu>Audio Importer V2</Menu>
         <Geometry>
           <Size>

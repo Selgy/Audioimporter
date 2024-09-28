@@ -35,7 +35,12 @@ const config: CEP_Config = {
       minHeight: 350,
       maxWidth: 710,
       maxHeight: 850,
-      type: "ModalDialog", // Change the panel type
+      type: "Modeless", // Change the panel type
+      // Other possible types for the panel
+      // "Panel" - Standard panel
+      // "ModalDialog" - Modal dialog
+      // "Modeless" - Modeless dialog
+      // "Custom" - Custom type, often used for background tasks or other custom implementations
 
     },
     {
