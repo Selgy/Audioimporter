@@ -16,7 +16,6 @@ const Settings: React.FC = () => {
     const [config, setConfig] = useState<Config>({});
     const [debugLog, setDebugLog] = useState<string[]>([]);
 
-
     useEffect(() => {
         console.log('useEffect hook is running');
         startWebSocketConnection();
@@ -75,12 +74,6 @@ const Settings: React.FC = () => {
                 loadConfig();
             };
     
-            socketRef.current.onmessage = (event) => {
-                const data = event.data;
-                console.log(`WebSocket received message: ${data}`);
-                appendToDebugLog(`Received message: ${data}`);
-            };
-    
             socketRef.current.onerror = (error: Event) => {
                 console.error('WebSocket error encountered:', error);
                 appendToDebugLog(`WebSocket error: ${error instanceof ErrorEvent ? error.message : 'Unknown error'}`);
@@ -111,14 +104,12 @@ const Settings: React.FC = () => {
         }
     };
 
-
     const reconnectWebSocket = () => {
         if (socketRef.current?.readyState === WebSocket.CLOSED) {
             appendToDebugLog("WebSocket disconnected. Attempting to reconnect...");
             startWebSocketConnection();
         }
     };
-
 
     const fetchLatestConfig = (): Promise<Config> => {
         return new Promise((resolve, reject) => {
@@ -141,6 +132,48 @@ const Settings: React.FC = () => {
         });
     };
 
+    // Add the normalizeKeyCombination function
+    const normalizeKeyCombination = (keyCombination: string): string => {
+        const keyMap: { [key: string]: string } = {
+            'LAlt': 'Alt',
+            'RAlt': 'Alt',
+            'LControl': 'Ctrl',
+            'RControl': 'Ctrl',
+            'ControlLeft': 'Ctrl',
+            'ControlRight': 'Ctrl',
+            'Numpad1': '1',
+            'Numpad2': '2',
+            'Numpad3': '3',
+            'Numpad4': '4',
+            'Numpad5': '5',
+            'Numpad6': '6',
+            'Numpad7': '7',
+            'Numpad8': '8',
+            'Numpad9': '9',
+            'Numpad0': '0',
+            // Add more key mappings as needed
+        };
+
+        const priority = ['ctrl', 'shift', 'alt'];
+
+        const mappedKeys = keyCombination
+            .split('+')
+            .map((key) => keyMap[key] || key)
+            .map((key) => key.toLowerCase());
+
+        const sortedKeys = mappedKeys.sort((a, b) => {
+            const aIndex = priority.indexOf(a);
+            const bIndex = priority.indexOf(b);
+
+            if (aIndex === -1 && bIndex === -1) return a.localeCompare(b);
+            if (aIndex === -1) return 1;
+            if (bIndex === -1) return -1;
+            return aIndex - bIndex;
+        });
+
+        return sortedKeys.join('+');
+    };
+
     const handleCombo = async (combo: string) => {
         appendToDebugLog(`Handling combo: ${combo}`);
         
@@ -152,30 +185,32 @@ const Settings: React.FC = () => {
                 appendToDebugLog(`Config is empty, no bindings to process`);
                 return;
             }
-    
-            const normalizedCombo = combo.split('+').map(key => key.toLowerCase()).sort().join('+');
+
+            // Normalize the incoming combo
+            const normalizedCombo = normalizeKeyCombination(combo);
             appendToDebugLog(`Normalized combo: ${normalizedCombo}`);
-        
+
+            // Normalize the config keys
             const normalizedConfig: Config = Object.fromEntries(
                 Object.entries(latestConfig).map(([key, value]) => [
-                    key.split('+').map(k => k.toLowerCase()).sort().join('+'),
+                    normalizeKeyCombination(key),
                     value
                 ])
             );
-        
+
             appendToDebugLog(`Normalized config: ${JSON.stringify(normalizedConfig, null, 2)}`);
-        
+
             if (normalizedConfig[normalizedCombo]) {
                 const binding: AudioBinding = normalizedConfig[normalizedCombo];
                 appendToDebugLog(`Found binding for combo: ${normalizedCombo}`);
-        
+
                 if (binding.path) {
                     appendToDebugLog(`Executing script for path: ${binding.path}, track: ${binding.track}, volume: ${binding.volume}dB, and pitch: ${binding.pitch} semitones`);
                     executePremiereProScript(
                         binding.path, 
                         parseInt(binding.track.replace('A', ''), 10), 
                         binding.volume,
-                        binding.pitch ||0     // Provide a default value of 0 if pitch is undefined
+                        binding.pitch || 0 // Provide a default value of 0 if pitch is undefined
                     );
                 } else {
                     appendToDebugLog(`No path specified for combo: ${normalizedCombo}`);
@@ -240,10 +275,7 @@ const Settings: React.FC = () => {
             appendToDebugLog("window.__adobe_cep__.evalScript is not available");
         }
     };
-    
 
-
-    
     const sendLogToPanel = (message: string) => {
         if (window.electron && window.electron.ipcRenderer) {
             window.electron.ipcRenderer.send('background-log', message);
