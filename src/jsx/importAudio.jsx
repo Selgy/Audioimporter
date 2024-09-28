@@ -163,7 +163,7 @@ function importAudioToTrack(filePath, initialTrackIndex, volume, pitch, debugMod
 
 function applyPitchShifterToImportedAudio(pitch, addDebugMessage) {
     try {
-        addDebugMessage("Starting applyPitchShifterToImportedAudio function"); // Start of the function
+        addDebugMessage("Starting applyPitchShifterToImportedAudio function");
 
         var sequence = app.project.activeSequence;
         if (!sequence) {
@@ -181,118 +181,85 @@ function applyPitchShifterToImportedAudio(pitch, addDebugMessage) {
         }
 
         addDebugMessage("Applying pitch shifter to clip: " + clip.name);
-        addDebugMessage("Clip found for pitch shift: " + clip.name); // Confirm clip selection
 
         // Get the QE sequence
-        var qeSequence;
-        try {
-            qeSequence = qe.project.getActiveSequence();
-            if (!qeSequence) {
-                throw new Error("QE sequence not found");
-            }
-        } catch (qeSequenceError) {
-            addDebugMessage("Failed to retrieve QE sequence: " + qeSequenceError.message);
-            throw qeSequenceError;
+        var qeSequence = qe.project.getActiveSequence();
+        if (!qeSequence) {
+            throw new Error("QE sequence not found");
         }
 
         addDebugMessage("QE sequence found");
-        addDebugMessage("QE sequence found"); // Confirm QE sequence found
 
         // Find the QE clip
-        var qeClip;
-        try {
-            qeClip = findQEClip(qeSequence, clip, addDebugMessage);
-            if (!qeClip) {
-                throw new Error("QE clip not found");
-            }
-        } catch (qeClipError) {
-            addDebugMessage("Failed to retrieve QE clip: " + qeClipError.message);
-            throw qeClipError;
+        var qeClip = findQEClip(qeSequence, clip, addDebugMessage);
+        if (!qeClip) {
+            throw new Error("QE clip not found");
         }
 
-        addDebugMessage("QE clip found");
-        addDebugMessage("QE clip found for pitch shift: " + qeClip.name); // Confirm QE clip found
+        addDebugMessage("QE clip found: " + qeClip.name);
 
-        // Apply the Pitch Shifter effect as an audio effect, not a video effect
-        try {
-            if (!clipHasPitchShifter(qeClip)) {
-                addDebugMessage("Adding Pitch Shifter to QE clip"); // Debugging log for effect addition
-                var pitchShifterEffect;
-                try {
-                    pitchShifterEffect = qe.project.getAudioEffectByName("Pitch Shifter");
-                    if (!pitchShifterEffect) {
-                        throw new Error("Pitch Shifter effect not found");
-                    }
-                } catch (effectError) {
-                    addDebugMessage("Failed to find Pitch Shifter effect: " + effectError.message);
-                    throw effectError;
-                }
-
-                addDebugMessage("Pitch Shifter effect found in effects list"); // Confirm effect presence
-                try {
-                    qeClip.addAudioEffect(pitchShifterEffect);
-                    addDebugMessage("Pitch Shifter effect added");
-                    addDebugMessage("Pitch Shifter effect added to QE clip"); // Confirm effect addition
-                } catch (addEffectError) {
-                    addDebugMessage("Failed to add Pitch Shifter effect: " + addEffectError.message);
-                    throw addEffectError;
-                }
-            } else {
-                addDebugMessage("Pitch Shifter already exists on clip");
-                addDebugMessage("Pitch Shifter already exists on the QE clip"); // Confirm existing effect
+        // Apply the Pitch Shifter effect if not already present
+        if (!clipHasPitchShifter(qeClip)) {
+            addDebugMessage("Adding Pitch Shifter to QE clip");
+            var pitchShifterEffect = qe.project.getAudioEffectByName("Pitch Shifter");
+            if (!pitchShifterEffect) {
+                throw new Error("Pitch Shifter effect not found");
             }
-        } catch (effectApplicationError) {
-            addDebugMessage("Error during effect application: " + effectApplicationError.message);
-            throw effectApplicationError;
+            qeClip.addAudioEffect(pitchShifterEffect);
+            addDebugMessage("Pitch Shifter effect added");
+        } else {
+            addDebugMessage("Pitch Shifter already exists on clip");
         }
 
-        // Adding a delay to ensure the effect properties are accessible
-        // Set the pitch value
-        addDebugMessage("Setting pitch value to: " + pitch); // Log before setting pitch
-        try {
-            var pitchShifterFound = false;
-            var transposeRatioPropertyFound = false;
+        // Now access the clip via the standard DOM to set the effect properties
+        addDebugMessage("Accessing clip via standard DOM to set effect properties");
 
-            for (var i = 0; i < qeClip.numComponents; i++) {
-                var effect = qeClip.getComponentAt(i);
-                if (effect.name === "Pitch Shifter") {
-                    addDebugMessage("Pitch Shifter effect found on clip."); // Confirm Pitch Shifter found
-                    pitchShifterFound = true;
+        // Give some time for the effect to be applied
+        $.sleep(100);
 
-                    for (var j = 0; j < effect.properties.numItems; j++) {
-                        var property = effect.properties[j];
-                        addDebugMessage("Property " + j + ": " + property.displayName + " = " + property.getValue() + ", Property Name: " + property.name); // Log each property
+        // Find the "Pitch Shifter" effect in the clip's components
+        var pitchShifterFound = false;
 
-                        if (property.displayName === "Transpose Ratio" || property.name.includes("Transpose")) {
-                            addDebugMessage("Setting Transpose Ratio for semitone value: " + pitch); // Confirm Transpose Ratio property found
+        for (var i = 0; i < clip.components.numItems; i++) {
+            var component = clip.components[i];
+            addDebugMessage("Component " + i + ": " + component.displayName + " (" + component.matchName + ")");
 
-                            var transposeRatioValue = semitonesToTransposeRatio(pitch); // Convert semitones to ratio
-                            property.setValue(transposeRatioValue, true);
-                            addDebugMessage("Transpose Ratio set to: " + transposeRatioValue); // Confirm value set
-                            transposeRatioPropertyFound = true;
-                            break; // Exit the property loop once Transpose Ratio is found and set
-                        }
+            if (component.displayName === "Pitch Shifter" || component.matchName === "ADBE Pitch Shifter") {
+                pitchShifterFound = true;
+
+                // Log all properties of the effect
+                addDebugMessage("Logging properties of the Pitch Shifter effect:");
+                logComponentProperties(component, "", addDebugMessage);
+
+                // Now attempt to set the "Transpose Ratio" property
+                var propertySet = false;
+
+                for (var j = 0; j < component.properties.numItems; j++) {
+                    var property = component.properties[j];
+                    addDebugMessage("Property " + j + ": " + property.displayName + " (" + property.matchName + ")");
+
+                    if (property.displayName === "Transpose Ratio" || property.matchName === "ADBE Pitch Shifter-0001") {
+                        var transposeRatioValue = semitonesToTransposeRatio(pitch);
+                        property.setValue(transposeRatioValue, true);
+                        addDebugMessage("Transpose Ratio set to: " + transposeRatioValue);
+                        propertySet = true;
+                        break;
                     }
-
-                    if (!transposeRatioPropertyFound) {
-                        throw new Error("Transpose Ratio property not found in Pitch Shifter effect.");
-                    }
-                    break; // Exit the component loop once Pitch Shifter is found
                 }
-            }
 
-            if (!pitchShifterFound) {
-                throw new Error("Pitch Shifter effect not found on clip.");
-            }
+                if (!propertySet) {
+                    throw new Error("Transpose Ratio property not found in Pitch Shifter effect.");
+                }
 
-            if (pitchShifterFound && transposeRatioPropertyFound) {
-                addDebugMessage("Pitch value successfully set to: " + pitch);
+                break;
             }
-
-        } catch (pitchValueError) {
-            addDebugMessage("Failed to set pitch value: " + pitchValueError.message);
-            throw pitchValueError;
         }
+
+        if (!pitchShifterFound) {
+            throw new Error("Pitch Shifter effect not found on clip.");
+        }
+
+        addDebugMessage("Pitch value successfully set to: " + pitch);
 
     } catch (e) {
         var errorMessage = "Error in applyPitchShifterToImportedAudio: " + e.toString();
@@ -301,8 +268,24 @@ function applyPitchShifterToImportedAudio(pitch, addDebugMessage) {
         }
 
         addDebugMessage(errorMessage);
-        addDebugMessage(errorMessage);  // Display detailed error message
-        throw e;  // Rethrow the error so it's logged properly
+        throw e;
+    }
+}
+
+
+function logComponentProperties(component, indent, addDebugMessage) {
+    indent = indent || '';
+    if (!component || !component.properties) {
+        addDebugMessage(indent + "No properties found for this component.");
+        return;
+    }
+    for (var i = 0; i < component.properties.numItems; i++) {
+        var property = component.properties[i];
+        addDebugMessage(indent + "Property " + i + ": " + property.displayName + " (" + property.matchName + ")");
+        // If the property has sub-properties, recursively log them
+        if (property.properties && property.properties.numItems > 0) {
+            logComponentProperties(property, indent + '  ', addDebugMessage);
+        }
     }
 }
 
@@ -454,17 +437,53 @@ function dbToDecibel(x) {
 
 
 
-function logEffectProperties(effect, indent) {
+function logEffectProperties(effect, indent, addDebugMessage) {
     indent = indent || '';
+    if (!effect.properties) {
+        addDebugMessage(indent + "No properties found for this effect.");
+        return;
+    }
     for (var i = 0; i < effect.properties.numItems; i++) {
         var property = effect.properties[i];
-        addDebugMessage(indent + "Property " + i + ": " + property.displayName + " (" + property.name + ") = " + property.getValue());
+        addDebugMessage(indent + "Property " + i + ": " + property.displayName + " (" + property.name + ")");
         // If the property has sub-properties, recursively log them
         if (property.properties && property.properties.numItems > 0) {
-            logEffectProperties(property, indent + '  ');
+            logEffectProperties(property, indent + '  ', addDebugMessage);
         }
     }
 }
+
+function setTransposeRatio(effect, pitch, addDebugMessage) {
+    try {
+        var transposeRatioValue = semitonesToTransposeRatio(pitch);
+
+        // Attempt to set the property by name or index
+        var propertySet = false;
+
+        if (effect.properties) {
+            for (var j = 0; j < effect.properties.numItems; j++) {
+                var property = effect.properties[j];
+                addDebugMessage("Attempting to access property " + j + ": " + property.displayName + " (" + property.name + ")");
+                if (property.displayName === "Transpose Ratio" || property.name === "ADBE Pitch Shifter-0001") {
+                    property.setValue(transposeRatioValue, true);
+                    addDebugMessage("Transpose Ratio set to: " + transposeRatioValue);
+                    propertySet = true;
+                    break;
+                }
+            }
+        } else {
+            addDebugMessage("Effect properties are undefined.");
+        }
+
+        if (!propertySet) {
+            throw new Error("Transpose Ratio property not found in Pitch Shifter effect.");
+        }
+    } catch (e) {
+        addDebugMessage("Error in setTransposeRatio: " + e.message);
+        throw e;
+    }
+}
+
 
 
 
