@@ -8,20 +8,7 @@
   <body>
     <div id="root"></div>
     <script type="module" src="./index.tsx"></script>
-  </body>
-  <script>
-  function enforceSize() {
-    const panel = window.__adobe_cep__;
-    if (panel) {
-      const currentSize = panel.getWindowSize();
-      if (currentSize.width !== 500 || currentSize.height !== 550) {
-        panel.resizeContent(500, 550);
-      }
-    }
-  }
+    
 
-  window.addEventListener('resize', enforceSize);
-  // Ensure the function runs after the panel is fully loaded
-  window.addEventListener('load', enforceSize);
-</script>
+  </body>
 </html>

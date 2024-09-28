@@ -29,11 +29,11 @@ const config: CEP_Config = {
       name: "main",
       panelDisplayName: "Audio Importer V2",
       autoVisible: true,
-      width: 695,
+      width: 710,
       height: 500,
-      minWidth: 695,
+      minWidth: 710,
       minHeight: 350,
-      maxWidth: 695,
+      maxWidth: 710,
       maxHeight: 850,
       type: "ModalDialog", // Change the panel type
 

@@ -1,7 +1,5 @@
 import { defineConfig } from "vite";
-
-import react from "@vitejs/plugin-react"; // BOLT-CEP_REACT-ONLY
-
+import react from "@vitejs/plugin-react";
 import { cep, runAction } from "vite-cep-plugin";
 import cepConfig from "./cep.config";
 import path from "path";
@@ -9,23 +7,22 @@ import { extendscriptConfig } from "./vite.es.config";
 
 const extensions = [".js", ".ts", ".tsx"];
 
-const devDist = "dist";
-const cepDist = "cep";
-
 const src = path.resolve(__dirname, "src");
 const root = path.resolve(src, "js");
-const outDir = path.resolve(__dirname, "dist", "cep"); // Ensure this path is correct
+const outDir = path.resolve(__dirname, "dist", "cep");
 
+const devDist = "dist";
+const cepDist = "cep";
 
 const debugReact = process.env.DEBUG_REACT === "true";
 const isProduction = process.env.NODE_ENV === "production";
 const isMetaPackage = process.env.ZIP_PACKAGE === "true";
 const isPackage = process.env.ZXP_PACKAGE === "true" || isMetaPackage;
-const isServe = process.env.SERVE_PANEL === "true";
+const isServe = process.env.SERVE_PANEL === "true" || !isProduction; // Default to true in development
 const action = process.env.ACTION;
 
 let input = {};
-cepConfig.panels.map((panel) => {
+cepConfig.panels.forEach((panel) => {
   input[panel.name] = path.resolve(root, panel.mainPath);
 });
 
@@ -48,10 +45,9 @@ if (action) {
   process.exit();
 }
 
-// https://vitejs.dev/config/
 export default defineConfig({
   plugins: [
-    react(), // BOLT-CEP_REACT-ONLY
+    react(),
     cep(config),
   ],
   resolve: {
@@ -61,24 +57,22 @@ export default defineConfig({
   clearScreen: false,
   server: {
     port: cepConfig.port,
+    hmr: {
+      protocol: "ws",
+      host: "localhost",
+      port: cepConfig.port,
+    },
+    watch: {
+      usePolling: true, // Optional: Use polling if file changes aren't detected
+      interval: 100,    // Optional: Adjust the polling interval
+    },
   },
-  preview: {
-    port: cepConfig.servePort,
-  },
-
   build: {
     sourcemap: isPackage ? cepConfig.zxp.sourceMap : cepConfig.build?.sourceMap,
-    watch: {
-      include: ['src/js/**', 'src/jsx/**', 'src/**/*.ts', 'src/**/*.tsx'],
-    },
-    // commonjsOptions: {
-    //   transformMixedEsModules: true,
-    // },
     rollupOptions: {
       input,
       output: {
         manualChunks: {},
-        // esModule: false,
         preserveModules: false,
         format: "cjs",
       },
@@ -87,14 +81,3 @@ export default defineConfig({
     outDir,
   },
 });
-
-// rollup es3 build
-const outPathExtendscript = path.join("dist", "cep", "jsx", "index.js");
-extendscriptConfig(
-  `src/jsx/index.ts`,
-  outPathExtendscript,
-  cepConfig,
-  extensions,
-  isProduction,
-  isPackage
-);

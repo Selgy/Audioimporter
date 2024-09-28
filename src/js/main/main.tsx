@@ -466,10 +466,10 @@ const Main: React.FC = () => {
                 {/* Pitch Section */}
                 <div style={{ display: 'flex', alignItems: 'center', marginRight: '15px', position: 'relative' }}>
                     <FaWaveSquare style={{
-                            marginRight: '7px',
-                            marginLeft: '-5px',
+                            marginRight: '0px',
+                            marginLeft: '-15px',
                             width: '40px',
-                            padding: '6px',
+                            padding: '0px',
                         }}
                         />
                     <div style={{ position: 'relative' }}>
@@ -500,12 +500,7 @@ const Main: React.FC = () => {
         ))}
     </div>
 </div>
-
-
     );
-  
-    
-    
 };
 
 console.log('Exporting Main component');

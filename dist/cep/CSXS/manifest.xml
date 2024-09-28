@@ -40,15 +40,15 @@ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
         <Menu>Audio Importer V2</Menu>
         <Geometry>
           <Size>
-            <Width>695</Width>
+            <Width>710</Width>
             <Height>500</Height>
           </Size>
           <MaxSize>
-            <Width>695</Width>
+            <Width>710</Width>
             <Height>850</Height>
           </MaxSize>
           <MinSize>
-            <Width>695</Width>
+            <Width>710</Width>
             <Height>350</Height>
           </MinSize>
         </Geometry>
