@@ -368,20 +368,6 @@ function selectClipUsingQE(trackIndex, startTime, addDebugMessage) {
 }
 
 
-function selectClipAlternative(sequenceQE, trackIndex, clipQE, addDebugMessage) {
-    try {
-        // Alternative selection method using sequence.setSelection()
-        var startTime = clipQE.start;
-        var endTime = clipQE.end;
-        sequenceQE.setSelection(startTime, endTime);
-        addDebugMessage("Clip selected using alternative method");
-        return { success: true, message: "Clip selected using alternative method", trackIndex: trackIndex + 1 };
-    } catch (altSelectionError) {
-        addDebugMessage("Error in alternative clip selection: " + altSelectionError.toString());
-        return { success: false, message: "Failed to select clip using alternative method" };
-    }
-}
-
 
 
 
@@ -453,36 +439,6 @@ function logEffectProperties(effect, indent, addDebugMessage) {
     }
 }
 
-function setTransposeRatio(effect, pitch, addDebugMessage) {
-    try {
-        var transposeRatioValue = semitonesToTransposeRatio(pitch);
-
-        // Attempt to set the property by name or index
-        var propertySet = false;
-
-        if (effect.properties) {
-            for (var j = 0; j < effect.properties.numItems; j++) {
-                var property = effect.properties[j];
-                addDebugMessage("Attempting to access property " + j + ": " + property.displayName + " (" + property.name + ")");
-                if (property.displayName === "Transpose Ratio" || property.name === "ADBE Pitch Shifter-0001") {
-                    property.setValue(transposeRatioValue, true);
-                    addDebugMessage("Transpose Ratio set to: " + transposeRatioValue);
-                    propertySet = true;
-                    break;
-                }
-            }
-        } else {
-            addDebugMessage("Effect properties are undefined.");
-        }
-
-        if (!propertySet) {
-            throw new Error("Transpose Ratio property not found in Pitch Shifter effect.");
-        }
-    } catch (e) {
-        addDebugMessage("Error in setTransposeRatio: " + e.message);
-        throw e;
-    }
-}
 
 
 

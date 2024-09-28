@@ -19,6 +19,6 @@
       "@esTypes/*": ["./src/jsx"]
     }
   },
-  "include": ["./src"],
-  "exclude": ["./src/jsx"]
+  "include": ["./src/**/*"], // Include all files in src
+  "exclude": ["node_modules"]
 }

@@ -1,5 +1,6 @@
 import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react";
+
+import react from "@vitejs/plugin-react"; // BOLT-CEP_REACT-ONLY
 
 import { cep, runAction } from "vite-cep-plugin";
 import cepConfig from "./cep.config";
@@ -48,7 +49,10 @@ if (action) {
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react(), cep(config)],
+  plugins: [
+    react(), // BOLT-CEP_REACT-ONLY
+    cep(config),
+  ],
   resolve: {
     alias: [{ find: "@esTypes", replacement: path.resolve(__dirname, "src") }],
   },
@@ -64,7 +68,7 @@ export default defineConfig({
   build: {
     sourcemap: isPackage ? cepConfig.zxp.sourceMap : cepConfig.build?.sourceMap,
     watch: {
-      include: "src/jsx/**",
+      include: ['src/js/**', 'src/jsx/**', 'src/**/*.ts', 'src/**/*.tsx'],
     },
     // commonjsOptions: {
     //   transformMixedEsModules: true,

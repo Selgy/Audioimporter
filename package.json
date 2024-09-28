@@ -12,8 +12,11 @@
     "delsymlink": "cross-env ACTION=delsymlink vite"
   },
   "dependencies": {
+    "@sveltejs/vite-plugin-svelte": "^3.1.2",
+    "@vitejs/plugin-vue": "^5.1.4",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "svelte-preprocess": "^6.0.3"
   },
   "devDependencies": {
     "@babel/core": "^7.19.0",

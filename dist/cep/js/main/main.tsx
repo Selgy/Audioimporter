@@ -442,13 +442,7 @@ const Main: React.FC = () => {
                         />
                         <span style={{ marginRight: '10px' }}>st</span>
                         <label style={{ display: 'flex', alignItems: 'center', marginLeft: '5px', justifyContent: 'center' }}>
-                            <input 
-                                type="checkbox" 
-                                checked={config[key].importInMiddle || false} 
-                                onChange={(e) => updateBinding(key, { ...config[key], importInMiddle: e.target.checked })} 
-                                style={{ marginRight: '5px' }} 
-                            />
-                            Middle
+
                         </label>
                     </div>
                 ))}
