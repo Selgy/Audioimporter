@@ -14,7 +14,8 @@ const cepDist = "cep";
 
 const src = path.resolve(__dirname, "src");
 const root = path.resolve(src, "js");
-const outDir = path.resolve(__dirname, "dist", "cep");
+const outDir = path.resolve(__dirname, "dist", "cep"); // Ensure this path is correct
+
 
 const debugReact = process.env.DEBUG_REACT === "true";
 const isProduction = process.env.NODE_ENV === "production";

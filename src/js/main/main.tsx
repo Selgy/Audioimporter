@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Config, AudioBinding } from './types';
+import { FaVolumeUp, FaWaveSquare } from 'react-icons/fa';
+
 console.log('main.tsx is being executed');
 
 declare global {
@@ -285,16 +287,7 @@ const Main: React.FC = () => {
         });
     };
 
-    const handleNumberInput = useCallback((key: string, field: 'volume' | 'pitch', value: string) => {
-        const numValue = parseFloat(value);
-        if (!isNaN(numValue)) {
-            if (field === 'pitch' && (numValue < -12 || numValue > 12)) {
-                return; // Pitch should be between -12 and 12
-            }
-            updateBinding(key, { ...config[key], [field]: numValue }); // Make sure pitch is updated here
-        }
-    }, [config, updateBinding]);
-    
+
     
 
 
@@ -341,96 +334,145 @@ const Main: React.FC = () => {
         return filePath.split('\\').pop()?.split('/').pop() || ''; // Handles both Windows and Unix-style paths
     };
     
-
+    const handleNumberInput = useCallback((key: string, field: 'volume' | 'pitch', value: string) => {
+        // Check if the value is a valid number or an allowed partial value (empty, '-' or '-.')
+        if (value === '' || value === '-' || value === '-.' || /^-?\d*\.?\d*$/.test(value)) {
+            // Allow updating the input with the temporary value (partial input)
+            updateBinding(key, { ...config[key], [field]: value });
+        }
+    
+        // Check if the value is a valid number within the acceptable range
+        const numValue = parseFloat(value);
+        if (!isNaN(numValue)) {
+            // Apply limits only if the field is 'pitch'
+            if (field === 'pitch' && (numValue < -12 || numValue > 12)) {
+                return; // Pitch should be between -12 and 12
+            }
+            // Update binding with the valid numeric value
+            updateBinding(key, { ...config[key], [field]: numValue });
+        }
+    }, [config, updateBinding]);
+    
     return (
-        <div style={{ fontFamily: 'Roboto, sans-serif', backgroundColor: '#1e2057', color: '#ffffff', padding: '10px' }}>
-            <div style={{ marginBottom: '15px', padding: '10px', backgroundColor: '#2e2f77', borderRadius: '5px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <input
-                        type="text"
-                        readOnly
-                        value={isListeningForKey ? 'Press a key combination...' : 'Click Add Binding to start'}
-                        style={{ width: '250px', padding: '6px', backgroundColor: '#3e41a8', color: '#ffffff', border: 'none', borderRadius: '2px' }}
-                    />
-                    <button 
-                        onClick={addBinding}
-                        disabled={isListeningForKey}
-                        style={{ 
-                            width: '150px', 
-                            padding: '6px', 
-                            backgroundColor: isListeningForKey ? '#2e3177' : '#4e52ff', 
-                            color: '#ffffff', 
-                            borderRadius: '2px', 
-                            border: 'none',
-                            cursor: isListeningForKey ? 'not-allowed' : 'pointer'
-                        }}
-                    >
-                        {isListeningForKey ? 'Listening...' : 'Add Binding'}
-                    </button>
-                </div>
-            </div>
-    
-            {/* Hidden file input for audio selection */}
+
+
+
+<div style={{ fontFamily: 'Roboto, sans-serif', backgroundColor: '#1e2057', color: '#ffffff', padding: '10px' }}>
+    <div style={{ marginBottom: '15px', padding: '10px', backgroundColor: '#2e2f77', borderRadius: '5px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <input
-                type="file"
-                ref={fileInputRef}
-                style={{ display: 'none' }}
-                accept="audio/*"
+                type="text"
+                readOnly
+                value={isListeningForKey ? 'Press a key combination...' : 'Click Add Binding to start'}
+                style={{ width: '250px', padding: '6px', backgroundColor: '#3e41a8', color: '#ffffff', border: 'none', borderRadius: '2px' }}
             />
-    
-            {/* Keybind Rows */}
-            <div>
-                {Object.keys(config).map((key) => (
-                    <div key={key} style={{ display: 'flex', alignItems: 'center', marginBottom: '10px', backgroundColor: '#2e2f77', padding: '10px', borderRadius: '5px' }}>
-                        <button 
-                            onClick={() => deleteBinding(key)} 
-                            style={{ 
-                                width: '30px', 
-                                height: '30px', 
-                                padding: '6px', 
-                                backgroundColor: 'transparent', 
-                                color: '#ff5b3b', 
-                                borderRadius: '50%', 
-                                border: 'none', 
-                                cursor: 'pointer', 
-                                fontSize: '16px', 
-                                display: 'flex', 
-                                alignItems: 'center', 
-                                justifyContent: 'center', 
-                                marginRight: '10px'
-                            }}>
-                            ✖
-                        </button>
-                        <input type="text" readOnly value={formatKeyCombination(key)} style={{ width: '70px', padding: '6px', backgroundColor: '#3e41a8', color: '#ffffff', border: 'none', borderRadius: '2px', marginRight: '10px', textAlign: 'center' }} />
-                        <button onClick={() => console.log(`Edit binding for ${key}`)} style={{ width: '50px', padding: '6px', backgroundColor: '#4e52ff', color: '#ffffff', borderRadius: '2px', border: 'none', marginRight: '10px' }}>Edit</button>
-                        <select 
-                            value={config[key].track} 
-                            onChange={(e) => updateBinding(key, { ...config[key], track: e.target.value })} 
-                            style={{ width: '70px', padding: '6px', backgroundColor: '#3e41a8', color: '#ffffff', border: 'none', borderRadius: '2px', marginRight: '10px' }}
-                        >
-                            {Array.from({ length: 15 }, (_, i) => (
-                                <option key={i} value={`A${i + 1}`}>A{i + 1}</option>
-                            ))}
-                        </select>
-                        <input 
-                            type="text" 
-                            readOnly 
-                            value={extractFileName(config[key].path)} 
-                            style={{ width: '120px', padding: '7px', backgroundColor: '#3e41a8', color: '#ffffff', border: 'none', borderRadius: '2px', marginRight: '10px' }} 
-                        />
-                        <button 
-                            onClick={() => selectAudioFile(key)} 
-                            style={{ width: '120px', padding: '6px', backgroundColor: '#4e52ff', color: '#ffffff', borderRadius: '2px', border: 'none', marginRight: '10px' }}
-                        >
-                            Audio...
-                        </button>
+            <button 
+                onClick={addBinding}
+                disabled={isListeningForKey}
+                style={{ 
+                    width: '150px', 
+                    padding: '6px', 
+                    backgroundColor: isListeningForKey ? '#2e3177' : '#4e52ff', 
+                    color: '#ffffff', 
+                    borderRadius: '2px', 
+                    border: 'none',
+                    cursor: isListeningForKey ? 'not-allowed' : 'pointer'
+                }}
+            >
+                {isListeningForKey ? 'Listening...' : 'Add Binding'}
+            </button>
+        </div>
+    </div>
+
+    {/* Hidden file input for audio selection */}
+    <input
+        type="file"
+        ref={fileInputRef}
+        style={{ display: 'none' }}
+        accept="audio/*"
+    />
+
+    {/* Keybind Rows */}
+    <div>
+        {Object.keys(config).map((key) => (
+            <div key={key} style={{ display: 'flex', alignItems: 'center', marginBottom: '10px', backgroundColor: '#2e2f77', padding: '10px', borderRadius: '5px' }}>
+                <button 
+                    onClick={() => deleteBinding(key)} 
+                    style={{ 
+                        width: '30px', 
+                        height: '30px', 
+                        padding: '6px', 
+                        backgroundColor: 'transparent', 
+                        color: '#ff5b3b', 
+                        borderRadius: '50%', 
+                        border: 'none', 
+                        cursor: 'pointer', 
+                        fontSize: '16px', 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center', 
+                        marginRight: '10px'
+                    }}>
+                    ✖
+                </button>
+                <input type="text" readOnly value={formatKeyCombination(key)} style={{ width: '70px', padding: '6px', backgroundColor: '#3e41a8', color: '#ffffff', border: 'none', borderRadius: '2px', marginRight: '10px', textAlign: 'center' }} />
+                <button onClick={() => console.log(`Edit binding for ${key}`)} style={{ width: '50px', padding: '6px', backgroundColor: '#4e52ff', color: '#ffffff', borderRadius: '2px', border: 'none', marginRight: '10px' }}>Edit</button>
+                <select 
+                    value={config[key].track} 
+                    onChange={(e) => updateBinding(key, { ...config[key], track: e.target.value })} 
+                    style={{ width: '70px', padding: '6px', backgroundColor: '#3e41a8', color: '#ffffff', border: 'none', borderRadius: '2px', marginRight: '10px' }}
+                >
+                    {Array.from({ length: 15 }, (_, i) => (
+                        <option key={i} value={`A${i + 1}`}>A{i + 1}</option>
+                    ))}
+                </select>
+                <input 
+                    type="text" 
+                    readOnly 
+                    value={extractFileName(config[key].path)} 
+                    style={{ width: '120px', padding: '7px', backgroundColor: '#3e41a8', color: '#ffffff', border: 'none', borderRadius: '2px', marginRight: '10px' }} 
+                />
+                <button 
+                    onClick={() => selectAudioFile(key)} 
+                    style={{ width: '120px', padding: '6px', backgroundColor: '#4e52ff', color: '#ffffff', borderRadius: '2px', border: 'none', marginRight: '10px' }}
+                >
+                    Audio...
+                </button>
+                
+                {/* Volume Section */}
+                <div style={{ display: 'flex', alignItems: 'center', marginRight: '15px', position: 'relative' }}>
+                    <FaVolumeUp style={{ color: '#ffffff', marginRight: '10px' }} />
+                    <div style={{ position: 'relative' }}>
                         <input 
                             type="number" 
                             value={config[key].volume}
                             onChange={(e) => handleNumberInput(key, 'volume', e.target.value)} 
-                            style={{ width: '60px', padding: '6px', backgroundColor: '#3e41a8', color: '#ffffff', border: 'none', borderRadius: '2px', marginRight: '5px' }} 
+                            style={{ width: '40px', padding: '6px', backgroundColor: '#3e41a8', color: '#ffffff', border: 'none', borderRadius: '2px', textAlign: 'center' }} 
                         />
-                        <span style={{ marginRight: '10px' }}>dB</span>
+                        <span style={{ 
+                            position: 'absolute', 
+                            right: '6px', 
+                            top: '50%', 
+                            transform: 'translateY(-50%)', 
+                            color: '#ffffff', 
+                            fontSize: '12px', 
+                            pointerEvents: 'none' 
+                        }}>
+                            dB
+                        </span>
+                    </div>
+                </div>
+
+                {/* Pitch Section */}
+                <div style={{ display: 'flex', alignItems: 'center', marginRight: '15px', position: 'relative' }}>
+                    <FaWaveSquare style={{
+                            marginRight: '7px',
+                            marginLeft: '-5px',
+                            width: '40px',
+                            padding: '6px',
+                        }}
+                        />
+                    <div style={{ position: 'relative' }}>
                         <input 
                             type="number" 
                             value={config[key].pitch}
@@ -438,17 +480,30 @@ const Main: React.FC = () => {
                             min="-12"
                             max="12"
                             step="1"
-                            style={{ width: '60px', padding: '6px', backgroundColor: '#3e41a8', color: '#ffffff', border: 'none', borderRadius: '2px', marginRight: '5px' }} 
+                            style={{ width: '40px', padding: '6px', backgroundColor: '#3e41a8', color: '#ffffff', border: 'none', borderRadius: '2px', textAlign: 'center' }} 
                         />
-                        <span style={{ marginRight: '10px' }}>st</span>
-                        <label style={{ display: 'flex', alignItems: 'center', marginLeft: '5px', justifyContent: 'center' }}>
-
-                        </label>
+                        <span style={{ 
+                            position: 'absolute', 
+                            right: '6px', 
+                            top: '50%', 
+                            transform: 'translateY(-50%)', 
+                            color: '#ffffff', 
+                            fontSize: '12px', 
+                            pointerEvents: 'none' 
+                        }}>
+                            st
+                        </span>
                     </div>
-                ))}
+                </div>
+                
             </div>
-        </div>
+        ))}
+    </div>
+</div>
+
+
     );
+  
     
     
 };

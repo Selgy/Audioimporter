@@ -2946,6 +2946,11 @@ react-dom@^18.2.0:
     loose-envify "^1.1.0"
     scheduler "^0.23.2"
 
+react-icons@^5.3.0:
+  version "5.3.0"
+  resolved "https://registry.yarnpkg.com/react-icons/-/react-icons-5.3.0.tgz#ccad07a30aebd40a89f8cfa7d82e466019203f1c"
+  integrity sha512-DnUk8aFbTyQPSkCfF8dbX6kQjXA9DktMeJqfjrg6cK9vwQVMxmcA3BfP4QoiztVmEHtwlTgLFsPuH2NskKT6eg==
+
 react-refresh@^0.14.0:
   version "0.14.2"
   resolved "https://registry.yarnpkg.com/react-refresh/-/react-refresh-0.14.2.tgz#3833da01ce32da470f1f936b9d477da5c7028bf9"
@@ -3328,7 +3333,7 @@ types-for-adobe-extras@^0.0.6:
   resolved "https://registry.yarnpkg.com/types-for-adobe-extras/-/types-for-adobe-extras-0.0.6.tgz#a7fa640c2c868466c32198915dc558c8dd9c573d"
   integrity sha512-XtEElyMr+hggxogbUlPgb1AAWPZ2yzkuDwtceDXjos4LmyEUExYR3ga4wtS0QmVnEZDSy+Avm9Ki/IkPG/7SEA==
 
-types-for-adobe@^7.2.0:
+types-for-adobe@^7.2.1:
   version "7.2.1"
   resolved "https://registry.yarnpkg.com/types-for-adobe/-/types-for-adobe-7.2.1.tgz#0a9c9c79da94d4ef69f55d5c19be37ccf6665bf5"
   integrity sha512-HWlzel9oR67KhVngn+BgMZmnOsGNbxrZ3iAE9Bgm+8Yo6QZjOhrEON8tQdlp0grehprYzdKh2nFopRxZPxvaLw==

@@ -27,8 +27,13 @@ var config = {
     name: "main",
     panelDisplayName: "Audio Importer V2",
     autoVisible: true,
-    width: 690,
-    height: 650
+    width: 695,
+    height: 500,
+    minWidth: 695,
+    minHeight: 350,
+    maxWidth: 695,
+    maxHeight: 850,
+    type: "ModalDialog" // Change the panel type
   }, {
     mainPath: "./settings/index.html",
     name: "settings",

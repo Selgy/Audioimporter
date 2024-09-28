@@ -20,5 +20,5 @@
     }
   },
   "include": ["./src/**/*"], // Include all files in src
-  "exclude": ["node_modules"]
+  "exclude": ["./src/jsx"]
 }
