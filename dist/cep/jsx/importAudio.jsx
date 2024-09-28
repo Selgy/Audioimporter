@@ -99,13 +99,12 @@ function importAudioToTrack(filePath, initialTrackIndex, volume, pitch, debugMod
             }
             addDebugMessage("Debug 13: Clip inserted");
 
+            var selectionResult = selectClipUsingQE(intendedTrackIndex, insertTime, addDebugMessage);
 
-        var selectionResult = selectClipUsingQE(intendedTrackIndex, insertTime, addDebugMessage);
-
-        if (!selectionResult.success) {
-            throw new Error("Clip selection failed: " + selectionResult.message);
-        }
-        addDebugMessage("Debug 14: Clip time range selected successfully");
+            if (!selectionResult.success) {
+                throw new Error("Clip selection failed: " + selectionResult.message);
+            }
+            addDebugMessage("Debug 14: Clip time range selected successfully");
 
         } catch (insertError) {
             throw new Error("Failed to insert clip - " + insertError.toString());
@@ -134,31 +133,211 @@ function importAudioToTrack(filePath, initialTrackIndex, volume, pitch, debugMod
             throw audioError;
         }
 
-
         // At the end of the function, add this alert:
-        alert("Import Audio Debug Log:\n" + debugLog);
+        addDebugMessage("Import Audio Debug Log:\n" + debugLog);
 
-        return {
+        return JSON.stringify({
             success: true,
             message: "Audio imported successfully",
             trackIndex: intendedTrackIndex + 1,
             clipName: newClip.name,
             debugLog: debugLog
-        };
+        });
 
     } catch (e) {
         addDebugMessage("Fatal Error in importAudioToTrack: " + e.toString());
         if (e.stack) {
             addDebugMessage("Error stack: " + e.stack);
         }
-        // Add an alert to show the error and debug log
-        alert("Error occurred in importAudioToTrack:\n" + e.toString() + "\n\nDebug Log:\n" + debugLog);
-        return {
+        // Remove the alert
+        // alert("Error occurred in importAudioToTrack:\n" + e.toString() + "\n\nDebug Log:\n" + debugLog);
+
+        // Return the error as a JSON string
+        return JSON.stringify({
             success: false,
             message: "Error in importAudioToTrack: " + e.toString(),
             debugLog: debugLog
-        };
+        });
     }
+}
+
+function applyPitchShifterToImportedAudio(pitch, addDebugMessage) {
+    try {
+        addDebugMessage("Starting applyPitchShifterToImportedAudio function"); // Start of the function
+
+        var sequence = app.project.activeSequence;
+        if (!sequence) {
+            throw new Error("No active sequence found");
+        }
+
+        var selectedClips = sequence.getSelection();
+        if (!selectedClips || selectedClips.length === 0) {
+            throw new Error("No clip selected");
+        }
+
+        var clip = selectedClips[0];
+        if (!clip) {
+            throw new Error("Selected clip is undefined");
+        }
+
+        addDebugMessage("Applying pitch shifter to clip: " + clip.name);
+        addDebugMessage("Clip found for pitch shift: " + clip.name); // Confirm clip selection
+
+        // Get the QE sequence
+        var qeSequence;
+        try {
+            qeSequence = qe.project.getActiveSequence();
+            if (!qeSequence) {
+                throw new Error("QE sequence not found");
+            }
+        } catch (qeSequenceError) {
+            addDebugMessage("Failed to retrieve QE sequence: " + qeSequenceError.message);
+            throw qeSequenceError;
+        }
+
+        addDebugMessage("QE sequence found");
+        addDebugMessage("QE sequence found"); // Confirm QE sequence found
+
+        // Find the QE clip
+        var qeClip;
+        try {
+            qeClip = findQEClip(qeSequence, clip, addDebugMessage);
+            if (!qeClip) {
+                throw new Error("QE clip not found");
+            }
+        } catch (qeClipError) {
+            addDebugMessage("Failed to retrieve QE clip: " + qeClipError.message);
+            throw qeClipError;
+        }
+
+        addDebugMessage("QE clip found");
+        addDebugMessage("QE clip found for pitch shift: " + qeClip.name); // Confirm QE clip found
+
+        // Apply the Pitch Shifter effect as an audio effect, not a video effect
+        try {
+            if (!clipHasPitchShifter(qeClip)) {
+                addDebugMessage("Adding Pitch Shifter to QE clip"); // Debugging log for effect addition
+                var pitchShifterEffect;
+                try {
+                    pitchShifterEffect = qe.project.getAudioEffectByName("Pitch Shifter");
+                    if (!pitchShifterEffect) {
+                        throw new Error("Pitch Shifter effect not found");
+                    }
+                } catch (effectError) {
+                    addDebugMessage("Failed to find Pitch Shifter effect: " + effectError.message);
+                    throw effectError;
+                }
+
+                addDebugMessage("Pitch Shifter effect found in effects list"); // Confirm effect presence
+                try {
+                    qeClip.addAudioEffect(pitchShifterEffect);
+                    addDebugMessage("Pitch Shifter effect added");
+                    addDebugMessage("Pitch Shifter effect added to QE clip"); // Confirm effect addition
+                } catch (addEffectError) {
+                    addDebugMessage("Failed to add Pitch Shifter effect: " + addEffectError.message);
+                    throw addEffectError;
+                }
+            } else {
+                addDebugMessage("Pitch Shifter already exists on clip");
+                addDebugMessage("Pitch Shifter already exists on the QE clip"); // Confirm existing effect
+            }
+        } catch (effectApplicationError) {
+            addDebugMessage("Error during effect application: " + effectApplicationError.message);
+            throw effectApplicationError;
+        }
+
+        // Adding a delay to ensure the effect properties are accessible
+        // Set the pitch value
+        addDebugMessage("Setting pitch value to: " + pitch); // Log before setting pitch
+        try {
+            var pitchShifterFound = false;
+            var transposeRatioPropertyFound = false;
+
+            for (var i = 0; i < qeClip.numComponents; i++) {
+                var effect = qeClip.getComponentAt(i);
+                if (effect.name === "Pitch Shifter") {
+                    addDebugMessage("Pitch Shifter effect found on clip."); // Confirm Pitch Shifter found
+                    pitchShifterFound = true;
+
+                    for (var j = 0; j < effect.properties.numItems; j++) {
+                        var property = effect.properties[j];
+                        addDebugMessage("Property " + j + ": " + property.displayName + " = " + property.getValue() + ", Property Name: " + property.name); // Log each property
+
+                        if (property.displayName === "Transpose Ratio" || property.name.includes("Transpose")) {
+                            addDebugMessage("Setting Transpose Ratio for semitone value: " + pitch); // Confirm Transpose Ratio property found
+
+                            var transposeRatioValue = semitonesToTransposeRatio(pitch); // Convert semitones to ratio
+                            property.setValue(transposeRatioValue, true);
+                            addDebugMessage("Transpose Ratio set to: " + transposeRatioValue); // Confirm value set
+                            transposeRatioPropertyFound = true;
+                            break; // Exit the property loop once Transpose Ratio is found and set
+                        }
+                    }
+
+                    if (!transposeRatioPropertyFound) {
+                        throw new Error("Transpose Ratio property not found in Pitch Shifter effect.");
+                    }
+                    break; // Exit the component loop once Pitch Shifter is found
+                }
+            }
+
+            if (!pitchShifterFound) {
+                throw new Error("Pitch Shifter effect not found on clip.");
+            }
+
+            if (pitchShifterFound && transposeRatioPropertyFound) {
+                addDebugMessage("Pitch value successfully set to: " + pitch);
+            }
+
+        } catch (pitchValueError) {
+            addDebugMessage("Failed to set pitch value: " + pitchValueError.message);
+            throw pitchValueError;
+        }
+
+    } catch (e) {
+        var errorMessage = "Error in applyPitchShifterToImportedAudio: " + e.toString();
+        if (e.stack) {
+            errorMessage += "\nStack trace: " + e.stack;
+        }
+
+        addDebugMessage(errorMessage);
+        addDebugMessage(errorMessage);  // Display detailed error message
+        throw e;  // Rethrow the error so it's logged properly
+    }
+}
+
+
+// Update the semitonesToTransposeRatio function to handle non-integer values
+function semitonesToTransposeRatio(semitones) {
+    var semitones_to_ratio_mapping = {
+        12: 1, 11: 0.9251657128334, 10: 0.8545315861702, 9: 0.78786188364029,
+        8: 0.72493404150009, 7: 0.66553807258606, 6: 0.60947567224503,
+        5: 0.55655986070633, 4: 0.5066140294075, 3: 0.45947137475014,
+        2: 0.41497468948364, 1: 0.37297543883324, 0: 0.33333334326744,
+        "-1": 0.29591619968414, "-2": 0.26059913635254, "-3": 0.22726428508759,
+        "-4": 0.19580034911633, "-5": 0.16610236465931, "-6": 0.13807117938995,
+        "-7": 0.11161327362061, "-8": 0.08664035797119, "-9": 0.06306902319193,
+        "-10": 0.04082067683339, "-11": 0.0198210477829, "-12": 0
+    };
+    
+    // Convert semitones to a number and round to nearest 0.5
+    var roundedSemitones = Math.round(Number(semitones) * 2) / 2;
+    
+    // If the rounded value is in our mapping, return it
+    if (semitones_to_ratio_mapping.hasOwnProperty(roundedSemitones.toString())) {
+        return semitones_to_ratio_mapping[roundedSemitones.toString()];
+    }
+    
+    // If not, interpolate between the two nearest values
+    var lowerSemitone = Math.floor(roundedSemitones);
+    var upperSemitone = Math.ceil(roundedSemitones);
+    var lowerRatio = semitones_to_ratio_mapping[lowerSemitone.toString()] || 0.33333334326744;
+    var upperRatio = semitones_to_ratio_mapping[upperSemitone.toString()] || 0.33333334326744;
+    
+    var interpolationFactor = roundedSemitones - lowerSemitone;
+    var interpolatedRatio = lowerRatio + (upperRatio - lowerRatio) * interpolationFactor;
+    
+    return interpolatedRatio;
 }
 
 
@@ -271,183 +450,78 @@ function dbToDecibel(x) {
     return Math.pow(10, (x - 15) / 20);
 }
 
-function applyPitchShifterToImportedAudio(pitch, addDebugMessage) {
-    try {
-        alert("Starting applyPitchShifterToImportedAudio function"); // Start of the function
 
-        var sequence = app.project.activeSequence;
-        if (!sequence) {
-            throw new Error("No active sequence found");
+
+
+
+function logEffectProperties(effect, indent) {
+    indent = indent || '';
+    for (var i = 0; i < effect.properties.numItems; i++) {
+        var property = effect.properties[i];
+        addDebugMessage(indent + "Property " + i + ": " + property.displayName + " (" + property.name + ") = " + property.getValue());
+        // If the property has sub-properties, recursively log them
+        if (property.properties && property.properties.numItems > 0) {
+            logEffectProperties(property, indent + '  ');
         }
-
-        var selectedClips = sequence.getSelection();
-        if (!selectedClips || selectedClips.length === 0) {
-            throw new Error("No clip selected");
-        }
-
-        var clip = selectedClips[0];
-        if (!clip) {
-            throw new Error("Selected clip is undefined");
-        }
-
-        addDebugMessage("Applying pitch shifter to clip: " + clip.name);
-        alert("Clip found for pitch shift: " + clip.name); // Confirm clip selection
-
-        // Get the QE sequence
-        var qeSequence;
-        try {
-            qeSequence = qe.project.getActiveSequence();
-            if (!qeSequence) {
-                throw new Error("QE sequence not found");
-            }
-        } catch (qeSequenceError) {
-            alert("Failed to retrieve QE sequence: " + qeSequenceError.message);
-            throw qeSequenceError;
-        }
-
-        addDebugMessage("QE sequence found");
-        alert("QE sequence found"); // Confirm QE sequence found
-
-        // Find the QE clip
-        var qeClip;
-        try {
-            // Update call to findQEClip
-            qeClip = findQEClip(qeSequence, clip, addDebugMessage);
-
-            if (!qeClip) {
-                throw new Error("QE clip not found");
-            }
-        } catch (qeClipError) {
-            alert("Failed to retrieve QE clip: " + qeClipError.message);
-            throw qeClipError;
-        }
-
-        addDebugMessage("QE clip found");
-        alert("QE clip found for pitch shift: " + qeClip.name); // Confirm QE clip found
-
-        // Apply the Pitch Shifter effect as an audio effect, not a video effect
-        try {
-            if (!clipHasPitchShifter(qeClip)) {
-                alert("Adding Pitch Shifter to QE clip"); // Debugging log for effect addition
-                var pitchShifterEffect;
-                try {
-                    pitchShifterEffect = qe.project.getAudioEffectByName("Pitch Shifter");
-                    if (!pitchShifterEffect) {
-                        throw new Error("Pitch Shifter effect not found");
-                    }
-                } catch (effectError) {
-                    alert("Failed to find Pitch Shifter effect: " + effectError.message);
-                    throw effectError;
-                }
-
-                alert("Pitch Shifter effect found in effects list"); // Confirm effect presence
-                try {
-                    qeClip.addAudioEffect(pitchShifterEffect);
-                    addDebugMessage("Pitch Shifter effect added");
-                    alert("Pitch Shifter effect added to QE clip"); // Confirm effect addition
-                } catch (addEffectError) {
-                    alert("Failed to add Pitch Shifter effect: " + addEffectError.message);
-                    throw addEffectError;
-                }
-            } else {
-                addDebugMessage("Pitch Shifter already exists on clip");
-                alert("Pitch Shifter already exists on the QE clip"); // Confirm existing effect
-            }
-        } catch (effectApplicationError) {
-            alert("Error during effect application: " + effectApplicationError.message);
-            throw effectApplicationError;
-        }
-
-        // Set the pitch value
-        alert("Setting pitch value to: " + pitch); // Log before setting pitch
-        try {
-            setPitchValue(qeClip, pitch); // Set the "Transpose Ratio"
-            addDebugMessage("Pitch Shifter effect set to " + pitch + " semitones");
-            alert("Pitch Shifter effect set to " + pitch + " semitones on QE clip"); // Confirm pitch set
-        } catch (pitchValueError) {
-            alert("Failed to set pitch value: " + pitchValueError.message);
-            throw pitchValueError;
-        }
-
-    } catch (e) {
-        var errorMessage = "Error in applyPitchShifterToImportedAudio: " + e.toString();
-        if (e.stack) {
-            errorMessage += "\nStack trace: " + e.stack;
-        }
-
-        addDebugMessage(errorMessage);
-        alert(errorMessage);  // Display detailed error message
-        throw e;  // Rethrow the error so it's logged properly
     }
 }
 
 
 
-
-
-
-
-
 function findQEClip(sequenceQE, clip, addDebugMessage) {
     try {
-        alert("Finding QE clip for: " + clip.name); // Log the clip name being searched
+        addDebugMessage("Finding QE clip for: " + clip.name);
         var matchingClip = null;
 
+        // Check in audio tracks
+        for (var i = 0; i < sequenceQE.numAudioTracks; i++) {
+            var track;
+            try {
+                track = sequenceQE.getAudioTrackAt(i);
+                addDebugMessage("Checking audio track " + i);
+                if (!track || track.numItems === 0) {
+                    addDebugMessage("Audio track " + i + " is empty or undefined.");
+                    continue;
+                }
+            } catch (trackError) {
+                addDebugMessage("Error accessing audio track " + i + ": " + trackError.message);
+                continue;
+            }
 
-
-        // If not found in video tracks, check audio tracks
-        if (!matchingClip) {
-            for (var i = 0; i < sequenceQE.numAudioTracks; i++) {
-                var track;
+            for (var j = 0; j < track.numItems; j++) {
+                var qeClip;
                 try {
-                    track = sequenceQE.getAudioTrackAt(i);
-                    alert("Checking audio track " + i); // Log the audio track index being checked
-                    if (!track || track.numItems === 0) {
-                        alert("Audio track " + i + " is empty or undefined.");
-                        continue; // Skip if the track is empty or not valid
+                    qeClip = track.getItemAt(j);
+                    addDebugMessage("Checking clip " + j + " on audio track " + i + ": " + qeClip.name);
+                    if (!qeClip) {
+                        addDebugMessage("Clip " + j + " on audio track " + i + " is undefined.");
+                        continue;
                     }
-                } catch (trackError) {
-                    alert("Error accessing audio track " + i + ": " + trackError.message);
-                    continue; // Skip this track and move to the next
+                } catch (clipError) {
+                    addDebugMessage("Error accessing clip " + j + " on audio track " + i + ": " + clipError.message);
+                    continue;
                 }
 
-                for (var j = 0; j < track.numItems; j++) {
-                    var qeClip;
-                    try {
-                        qeClip = track.getItemAt(j);
-                        alert("Checking clip " + j + " on audio track " + i + ": " + qeClip.name); // Log the clip name being checked
-                        if (!qeClip) {
-                            alert("Clip " + j + " on audio track " + i + " is undefined.");
-                            continue; // Skip if the clip is not valid
-                        }
-                    } catch (clipError) {
-                        alert("Error accessing clip " + j + " on audio track " + i + ": " + clipError.message);
-                        continue; // Skip this clip and move to the next
-                    }
-
-
-                    // Compare clip names and start time to find a match
-                    if (qeClip.name === clip.name && Math.abs(qeClip.start.ticks - clip.start.ticks) < 1) {
-                        alert("QE clip match found: " + qeClip.name + " on audio track " + i); // Confirm match found
-                        matchingClip = qeClip;
-                        break; // Found the match, exit the inner loop
-                    }
+                if (qeClip.name === clip.name && Math.abs(qeClip.start.ticks - clip.start.ticks) < 1) {
+                    addDebugMessage("QE clip match found: " + qeClip.name + " on audio track " + i);
+                    matchingClip = qeClip;
+                    break;
                 }
-                if (matchingClip) {
-                    break; // Exit the outer loop if a match is found
-                }
+            }
+            if (matchingClip) {
+                break;
             }
         }
 
         if (matchingClip) {
-            alert("QE clip found for: " + matchingClip.name + " at time: " + matchingClip.start.seconds); // Confirm match
+            addDebugMessage("QE clip found for: " + matchingClip.name + " at time: " + matchingClip.start.seconds);
             return matchingClip;
         } else {
-            alert("QE clip not found for: " + clip.name); // Log clip not found
+            addDebugMessage("QE clip not found for: " + clip.name);
             return null;
         }
     } catch (e) {
-        alert("Error in findQEClip: " + e.message); // Log any unexpected errors
+        addDebugMessage("Error in findQEClip: " + e.message);
         throw new Error("Error in findQEClip: " + e.message);
     }
 }
@@ -459,99 +533,15 @@ function clipHasPitchShifter(clip) {
     for (var i = 0; i < clip.numComponents; i++) {
         var effect = clip.getComponentAt(i);
         if (effect.name === "Pitch Shifter") {
+            logEffectProperties(effect);
             return true;
         }
     }
     return false;
 }
 
-function setPitchValue(clip, pitch) {
-    try {
-        var pitchShifterFound = false;
-        var transposeRatioPropertyFound = false;
-
-        // Add a small delay to ensure the effect properties are fully accessible
-        $.sleep(500); // Wait for 500 milliseconds before accessing the properties
-
-        for (var i = 0; i < clip.numComponents; i++) {
-            var effect = clip.getComponentAt(i);
-            if (effect.name === "Pitch Shifter") {
-                alert("Pitch Shifter effect found on clip."); // Confirm Pitch Shifter found
-                pitchShifterFound = true;
-
-                // Log available properties of the Pitch Shifter effect
-                for (var j = 0; j < effect.properties.numItems; j++) {
-                    var property = effect.properties[j];
-                    // Log each property in detail to identify the correct path
-                    alert("Property " + j + ": " + property.displayName + " = " + property.getValue() + ", Property Name: " + property.name); // Log each property
-
-                    // Check for "Transpose Ratio" and set its value
-                    if (property.displayName === "Transpose Ratio" || property.name.includes("Transpose")) {
-                        alert("Setting Transpose Ratio for semitone value: " + pitch); // Confirm Transpose Ratio property found
-
-                        var transposeRatioValue = semitonesToTransposeRatio(pitch); // Convert semitones to ratio
-                        property.setValue(transposeRatioValue, true);
-                        alert("Transpose Ratio set to: " + transposeRatioValue); // Confirm value set
-                        transposeRatioPropertyFound = true;
-                        break; // Exit the property loop once Transpose Ratio is found and set
-                    }
-                }
-
-                if (!transposeRatioPropertyFound) {
-                    throw new Error("Transpose Ratio property not found in Pitch Shifter effect.");
-                }
-                break; // Exit the component loop once Pitch Shifter is found
-            }
-        }
-
-        if (!pitchShifterFound) {
-            throw new Error("Pitch Shifter effect not found on clip.");
-        }
-
-        if (pitchShifterFound && transposeRatioPropertyFound) {
-            alert("Pitch value successfully set to: " + pitch);
-        }
-    } catch (e) {
-        alert("Error in setPitchValue: " + e.message); // Log any unexpected errors
-        throw new Error("Error in setPitchValue: " + e.message);
-    }
-}
 
 
-
-
-// Update the semitonesToTransposeRatio function to handle non-integer values
-function semitonesToTransposeRatio(semitones) {
-    var semitones_to_ratio_mapping = {
-        12: 1, 11: 0.9251657128334, 10: 0.8545315861702, 9: 0.78786188364029,
-        8: 0.72493404150009, 7: 0.66553807258606, 6: 0.60947567224503,
-        5: 0.55655986070633, 4: 0.5066140294075, 3: 0.45947137475014,
-        2: 0.41497468948364, 1: 0.37297543883324, 0: 0.33333334326744,
-        "-1": 0.29591619968414, "-2": 0.26059913635254, "-3": 0.22726428508759,
-        "-4": 0.19580034911633, "-5": 0.16610236465931, "-6": 0.13807117938995,
-        "-7": 0.11161327362061, "-8": 0.08664035797119, "-9": 0.06306902319193,
-        "-10": 0.04082067683339, "-11": 0.0198210477829, "-12": 0
-    };
-    
-    // Convert semitones to a number and round to nearest 0.5
-    var roundedSemitones = Math.round(Number(semitones) * 2) / 2;
-    
-    // If the rounded value is in our mapping, return it
-    if (semitones_to_ratio_mapping.hasOwnProperty(roundedSemitones.toString())) {
-        return semitones_to_ratio_mapping[roundedSemitones.toString()];
-    }
-    
-    // If not, interpolate between the two nearest values
-    var lowerSemitone = Math.floor(roundedSemitones);
-    var upperSemitone = Math.ceil(roundedSemitones);
-    var lowerRatio = semitones_to_ratio_mapping[lowerSemitone.toString()] || 0.33333334326744;
-    var upperRatio = semitones_to_ratio_mapping[upperSemitone.toString()] || 0.33333334326744;
-    
-    var interpolationFactor = roundedSemitones - lowerSemitone;
-    var interpolatedRatio = lowerRatio + (upperRatio - lowerRatio) * interpolationFactor;
-    
-    return interpolatedRatio;
-}
 
 
 

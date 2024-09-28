@@ -189,39 +189,58 @@ const Settings: React.FC = () => {
     };
 
     const executePremiereProScript = (filePath: string, track: number, volume: number, pitch: number) => {
-        console.log(`Executing script with pitch: ${pitch}`); // Add this log to check if pitch is passed
+        appendToDebugLog(`Executing script with parameters: filePath=${filePath}, track=${track}, volume=${volume}, pitch=${pitch}`);
+        
         const jsxRelativePath = './jsx/importAudio.jsx';
         const jsxFullPath = path.resolve(__dirname, jsxRelativePath);
     
+        // Ensure paths are correctly formatted for JSX
+        const formattedJsxPath = jsxFullPath.replace(/\\/g, '\\\\');
+        const formattedFilePath = filePath.replace(/\\/g, '\\\\');
+    
         const script = `
             try {
-                var jsxFile = new File("${jsxFullPath.replace(/\\/g, '\\\\')}");
-                $.writeln("Attempting to load file from: " + jsxFile.fsName);
-    
+                var jsxFile = new File("${formattedJsxPath}");
                 if (jsxFile.exists) {
                     $.evalFile(jsxFile);
-                    var result = importAudioToTrack("${filePath.replace(/\\/g, '\\\\')}", ${track}, ${volume}, ${pitch}, true);
-                    $.writeln('Success: ' + result);
-                    result;
+                    var result = importAudioToTrack("${formattedFilePath}", ${track}, ${volume}, ${pitch}, true);
+                    result; // Return the result from the function
                 } else {
                     throw new Error("JSX file not found at: " + jsxFile.fsName);
                 }
             } catch(e) {
-                $.writeln('Error: ' + e.toString());
-                e.toString();
+                // Return the error as a JSON string
+                JSON.stringify({
+                    success: false,
+                    message: e.toString(),
+                    debugLog: "Error occurred while executing JSX script."
+                });
             }
         `;
-        
     
-        appendToDebugLog(`Evaluating script: ${script}`);
+        appendToDebugLog(`Evaluating script:\n${script}`);
+    
         if (window.__adobe_cep__ && window.__adobe_cep__.evalScript) {
             window.__adobe_cep__.evalScript(script, (result: string) => {
                 appendToDebugLog(`Script execution result: ${result}`);
+                try {
+                    const parsedResult = JSON.parse(result);
+                    if (parsedResult.success) {
+                        appendToDebugLog(`JSX script executed successfully: ${parsedResult.message}`);
+                    } else {
+                        appendToDebugLog(`Error in JSX script: ${parsedResult.message}`);
+                    }
+                    appendToDebugLog(`Debug Log:\n${parsedResult.debugLog}`);
+                } catch (parseError) {
+                    appendToDebugLog(`Failed to parse result from JSX script: ${parseError}`);
+                    appendToDebugLog(`Raw result: ${result}`);
+                }
             });
         } else {
             appendToDebugLog("window.__adobe_cep__.evalScript is not available");
         }
     };
+    
 
 
     
