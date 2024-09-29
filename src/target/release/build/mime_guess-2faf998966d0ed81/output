@@ -1,1 +1,0 @@
-cargo:rustc-env=MIME_TYPES_GENERATED_PATH=C:\Users\Micka\Documents\Projet\Audioimporter\src\target\release\build\mime_guess-2faf998966d0ed81\out\mime_types_generated.rs

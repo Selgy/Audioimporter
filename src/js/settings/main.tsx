@@ -34,7 +34,7 @@ const Settings: React.FC = () => {
                 appendToDebugLog(`Received message: ${data}`);
                 
                 if (typeof data === 'string') {
-                    if (data.startsWith("CONFIG:")) {
+                    if (data.startsWith('CONFIG:')) {
                         const configData = JSON.parse(data.replace("CONFIG:", ""));
                         setConfig(configData);
                         configRef.current = configData;
@@ -113,24 +113,25 @@ const Settings: React.FC = () => {
 
     const fetchLatestConfig = (): Promise<Config> => {
         return new Promise((resolve, reject) => {
-            if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-                const messageHandler = (event: MessageEvent) => {
-                    const data = event.data;
-                    if (typeof data === 'string' && data.startsWith("CONFIG:")) {
-                        const configData = JSON.parse(data.replace("CONFIG:", ""));
-                        socketRef.current?.removeEventListener('message', messageHandler);
-                        configRef.current = configData; // Update the configRef
-                        setConfig(configData); // Update the state
-                        resolve(configData);
-                    }
-                };
-                socketRef.current.addEventListener('message', messageHandler);
-                socketRef.current.send('LOAD_CONFIG');
-            } else {
-                reject(new Error("WebSocket is not connected"));
-            }
+          if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+            const messageHandler = (event: MessageEvent) => {
+              const data = event.data;
+              if (typeof data === 'string' && data.startsWith("CONFIG:")) {
+                const configData = JSON.parse(data.replace("CONFIG:", ""));
+                socketRef.current?.removeEventListener('message', messageHandler);
+                configRef.current = configData; // Update the configRef
+                setConfig(configData); // Update the state
+                resolve(configData);
+              }
+            };
+            socketRef.current.addEventListener('message', messageHandler);
+            socketRef.current.send('LOAD_CONFIG');
+          } else {
+            reject(new Error("WebSocket is not connected"));
+          }
         });
-    };
+      };
+      
 
     // Add the normalizeKeyCombination function
     const normalizeKeyCombination = (keyCombination: string): string => {

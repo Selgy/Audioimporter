@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { FaVolumeUp, FaWaveSquare } from 'react-icons/fa';
-import { v4 as uuidv4 } from 'uuid'; // Import UUID library
+import { v4 as uuidv4 } from 'uuid';
 
 // Define your types
 interface AudioBinding {
@@ -42,6 +42,10 @@ const Main: React.FC = () => {
   const [keyBeingEdited, setKeyBeingEdited] = useState<string | null>(null);
   const [idBeingEdited, setIdBeingEdited] = useState<string | null>(null);
 
+  // Profile management state variables
+  const [profiles, setProfiles] = useState<string[]>([]);
+  const [currentProfile, setCurrentProfile] = useState<string | null>(null);
+
   // Refs
   const isListeningForKeyRef = useRef(isListeningForKey);
   const isEditingRef = useRef(isEditing);
@@ -76,34 +80,35 @@ const Main: React.FC = () => {
   // Function to normalize key combinations
   const normalizeKeyCombination = (keyCombination: string): string => {
     const keyMap: { [key: string]: string } = {
-      'LAlt': 'Alt',
-      'RAlt': 'Alt',
-      'LControl': 'Ctrl',
-      'RControl': 'Ctrl',
-      'ControlLeft': 'Ctrl',
-      'ControlRight': 'Ctrl',
-      'Numpad1': '1',
-      'Numpad2': '2',
-      'Numpad3': '3',
-      'Numpad4': '4',
-      'Numpad5': '5',
-      'Numpad6': '6',
-      'Numpad7': '7',
-      'Numpad8': '8',
-      'Numpad9': '9',
-      'Numpad0': '0',
+      LAlt: 'Alt',
+      RAlt: 'Alt',
+      LControl: 'Ctrl',
+      RControl: 'Ctrl',
+      ControlLeft: 'Ctrl',
+      ControlRight: 'Ctrl',
+      Numpad1: '1',
+      Numpad2: '2',
+      Numpad3: '3',
+      Numpad4: '4',
+      Numpad5: '5',
+      Numpad6: '6',
+      Numpad7: '7',
+      Numpad8: '8',
+      Numpad9: '9',
+      Numpad0: '0',
       // Add more key mappings as needed
     };
 
-    const priority = ['Ctrl', 'Shift', 'Alt'];
+    const priority = ['ctrl', 'shift', 'alt'];
 
     const mappedKeys = keyCombination
       .split('+')
-      .map((key) => keyMap[key] || key);
+      .map((key) => keyMap[key] || key)
+      .map((key) => key.toLowerCase());
 
     const sortedKeys = mappedKeys.sort((a, b) => {
-      const aIndex = priority.indexOf(a);
-      const bIndex = priority.indexOf(b);
+      const aIndex = priority.indexOf(a.charAt(0).toLowerCase() + a.slice(1));
+      const bIndex = priority.indexOf(b.charAt(0).toLowerCase() + b.slice(1));
 
       if (aIndex === -1 && bIndex === -1) return a.localeCompare(b);
       if (aIndex === -1) return 1;
@@ -114,11 +119,18 @@ const Main: React.FC = () => {
     return sortedKeys.join('+');
   };
 
-  // Function to load the config from the server
-  const loadConfig = () => {
-    console.log('Loading config');
+// Function to load configuration for the current profile
+const loadConfig = () => {
+  if (!currentProfile) {
+    appendToDebugLog('No current profile selected. Please create a profile.');
+    return;
+  }
+
+  if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+    console.log('Loading config for profile:', currentProfile);
     try {
-      socketRef.current?.send('LOAD_CONFIG');
+      // Load configuration for the current profile
+      socketRef.current.send(`LOAD_CONFIG:${currentProfile}`);
     } catch (error: unknown) {
       if (error instanceof Error) {
         appendToDebugLog(`Error loading config: ${error.message}`);
@@ -127,28 +139,144 @@ const Main: React.FC = () => {
       }
       console.error('Error loading config:', error);
     }
-  };
+  } else {
+    appendToDebugLog('Cannot load config: WebSocket is not open.');
+  }
+};
 
-  // Function to save the config to the server
-  const saveConfig = (newConfigArray: KeyBinding[]) => {
-    const configObject = newConfigArray.reduce((obj, keyBinding) => {
-      obj[keyBinding.key] = keyBinding.binding;
-      return obj;
-    }, {} as { [key: string]: AudioBinding });
+if (socketRef.current) {
+  socketRef.current.onmessage = (event) => {
+    console.log('Received message from server:', event.data);
+    const data = event.data;
+    appendToDebugLog(`Received message: ${data}`);
 
-    try {
-      appendToDebugLog(`Sending config to server: ${JSON.stringify(configObject)}`);
-      socketRef.current?.send(`SAVE_CONFIG:${JSON.stringify(configObject)}`);
-      appendToDebugLog('Config sent successfully');
-      setConfigArray(newConfigArray); // Update the local state
-    } catch (error: unknown) {
-      if (error instanceof Error) {
-        appendToDebugLog(`Error saving config: ${error.message}`);
-      } else {
-        appendToDebugLog(`Unexpected error saving config.`);
+    if (typeof data === 'string') {
+      if (data.startsWith('CONFIG:')) {
+        if (!currentProfile) {
+          appendToDebugLog('No current profile selected.');
+          return;
+        }
+        const configData = JSON.parse(data.replace('CONFIG:', '')) as {
+          [key: string]: AudioBinding;
+        };
+        // Convert the object to an array
+        const configArray: KeyBinding[] = Object.entries(configData).map(([key, binding]) => ({
+          id: uuidv4(), // Generate a new ID for each keybinding
+          key: normalizeKeyCombination(key),
+          binding,
+        }));
+        setConfigArray(configArray);
+        appendToDebugLog('Config loaded and converted to array successfully');
+      } else if (data.startsWith('COMBO:')) {
+        const combo = data.replace('COMBO:', '');
+        appendToDebugLog(`Processed combo: ${combo}`);
+
+        if (isListeningForKeyRef.current) {
+          if (isEditingRef.current && idBeingEditedRef.current) {
+            editKeyBind(idBeingEditedRef.current, combo);
+          } else {
+            addNewKeyBind(combo);
+          }
+        } else {
+          handleCombo(combo);
+        }
+      } else if (data.startsWith('PROFILES:')) {
+        const profilesData = JSON.parse(data.replace('PROFILES:', '')) as string[];
+        setProfiles(profilesData);
+        if (!currentProfile && profilesData.length > 0) {
+          setCurrentProfile(profilesData[0]);
+        }
+      } else if (data.startsWith('PROFILE_SWITCHED:')) {
+        const profileName = data.replace('PROFILE_SWITCHED:', '');
+        setCurrentProfile(profileName);
+        loadConfig(); // Load config for the new profile
+      } else if (data.startsWith('PROFILE_CREATED:')) {
+        const profileName = data.replace('PROFILE_CREATED:', '');
+        setProfiles((prev) => [...prev, profileName]);
+        setCurrentProfile(profileName);
+        setConfigArray([]); // Clear the bindings for the newly created profile
+        appendToDebugLog(`Profile created and switched to: ${profileName}`);
+    
+      } else if (data.startsWith('PROFILE_DELETED:')) {
+        const profileName = data.replace('PROFILE_DELETED:', '');
+        setProfiles((prev) => prev.filter((p) => p !== profileName));
+        
+        // Automatically switch to another profile if available
+        if (currentProfile === profileName) {
+          const newProfile = profiles.find((p) => p !== profileName) || null;
+          setCurrentProfile(newProfile);
+          
+          if (newProfile) {
+            socketRef.current?.send(`SWITCH_PROFILE:${newProfile}`);
+            setConfigArray([]); // Clear the current configArray before loading the new profile's config
+            loadConfig(); // Load the new profile's configuration
+          } else {
+            setConfigArray([]); // If no profiles left, clear the configArray
+          }
+        }
+        appendToDebugLog(`Profile deleted: ${profileName}`);
+      
+      } else if (data.startsWith('ERROR:')) {
+        const errorMessage = data.replace('ERROR:', '');
+        appendToDebugLog(`Error: ${errorMessage}`);
       }
     }
   };
+}
+
+
+const switchProfile = (profileName: string) => {
+  if (!socketRef.current) {
+    appendToDebugLog('WebSocket is not initialized.');
+    return;
+  }
+
+  setCurrentProfile(profileName);
+  setConfigArray([]);  // Clear the bindings UI before loading the new profile's bindings
+
+  // Save the last opened profile in localStorage
+  localStorage.setItem('lastProfile', profileName);
+
+  socketRef.current.send(`SWITCH_PROFILE:${profileName}`);
+};
+
+// Function to save configuration specific to the current profile
+const saveConfig = (newConfigArray: KeyBinding[]) => {
+  if (!currentProfile) {
+    appendToDebugLog('Cannot save config: No current profile selected.');
+    return;
+  }
+
+  if (!socketRef.current) {
+    appendToDebugLog('WebSocket is not initialized.');
+    return;
+  }
+
+  const configObject = newConfigArray.reduce((obj, keyBinding) => {
+    obj[keyBinding.key] = keyBinding.binding;
+    return obj;
+  }, {} as { [key: string]: AudioBinding });
+
+  try {
+    appendToDebugLog(`Sending config to server for profile ${currentProfile}: ${JSON.stringify(configObject)}`);
+    const message = JSON.stringify({
+      profile: currentProfile,  // Ensure the correct profile is included
+      config: configObject,
+    });
+    socketRef.current.send(`SAVE_CONFIG:${message}`);
+    appendToDebugLog('Config sent successfully');
+    setConfigArray(newConfigArray);  // Update the local state
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      appendToDebugLog(`Error saving config: ${error.message}`);
+    } else {
+      appendToDebugLog(`Unexpected error saving config.`);
+    }
+  }
+};
+
+
+
 
   // Function to update a binding
   const updateBinding = (id: string, value: AudioBinding) => {
@@ -260,7 +388,6 @@ const Main: React.FC = () => {
     [appendToDebugLog, saveConfig, stopListening]
   );
 
-  // Function to start the WebSocket connection
   function startWebSocketConnection(): void {
     if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
       appendToDebugLog('WebSocket already connected');
@@ -272,7 +399,8 @@ const Main: React.FC = () => {
 
     socketRef.current.onopen = () => {
       appendToDebugLog('Connected to Rust server');
-      loadConfig();
+      loadProfiles(); // Load profiles after connection is open
+      loadConfig(); // Load config after connection is open
     };
 
     socketRef.current.onerror = (error: Event) => {
@@ -296,8 +424,13 @@ const Main: React.FC = () => {
 
       if (typeof data === 'string') {
         if (data.startsWith('CONFIG:')) {
-          // Explicitly assert the type of configData
-          const configData = JSON.parse(data.replace('CONFIG:', '')) as { [key: string]: AudioBinding };
+          if (!currentProfile) {
+            appendToDebugLog('No current profile selected.');
+            return;
+          }
+          const configData = JSON.parse(data.replace('CONFIG:', '')) as {
+            [key: string]: AudioBinding;
+          };
           // Convert the object to an array
           const configArray: KeyBinding[] = Object.entries(configData).map(([key, binding]) => ({
             id: uuidv4(), // Generate a new ID for each keybinding
@@ -319,6 +452,44 @@ const Main: React.FC = () => {
           } else {
             handleCombo(combo);
           }
+        } else if (data.startsWith('PROFILES:')) {
+          const profilesData = JSON.parse(data.replace('PROFILES:', '')) as string[];
+          setProfiles(profilesData);
+          if (!currentProfile && profilesData.length > 0) {
+            setCurrentProfile(profilesData[0]);
+          }
+        } else if (data.startsWith('PROFILE_SWITCHED:')) {
+          const profileName = data.replace('PROFILE_SWITCHED:', '');
+          setCurrentProfile(profileName);
+          loadConfig(); // Load config for the new profile
+        } else if (data.startsWith('PROFILE_CREATED:')) {
+          const profileName = data.replace('PROFILE_CREATED:', '');
+          setProfiles((prev) => [...prev, profileName]);
+          setCurrentProfile(profileName);
+          setConfigArray([]); // Clear the bindings for the newly created profile
+          appendToDebugLog(`Profile created and switched to: ${profileName}`);
+        
+        } else if (data.startsWith('PROFILE_DELETED:')) {
+          const profileName = data.replace('PROFILE_DELETED:', '');
+          setProfiles((prev) => prev.filter((p) => p !== profileName));
+          
+          // Automatically switch to another profile if available
+          if (currentProfile === profileName) {
+            const newProfile = profiles.find((p) => p !== profileName) || null;
+            setCurrentProfile(newProfile);
+            
+            if (newProfile) {
+              socketRef.current?.send(`SWITCH_PROFILE:${newProfile}`);
+              setConfigArray([]); // Clear the current configArray before loading the new profile's config
+              loadConfig(); // Load the new profile's configuration
+            } else {
+              setConfigArray([]); // If no profiles left, clear the configArray
+            }
+          }
+          appendToDebugLog(`Profile deleted: ${profileName}`);    
+        } else if (data.startsWith('ERROR:')) {
+          const errorMessage = data.replace('ERROR:', '');
+          appendToDebugLog(`Error: ${errorMessage}`);
         }
       }
     };
@@ -437,19 +608,113 @@ const Main: React.FC = () => {
     [configArray, updateBinding]
   );
 
-  // useEffect to start the WebSocket connection on component mount
-  useEffect(() => {
-    console.log('useEffect hook is running');
-    startWebSocketConnection();
-    if (socketRef.current) {
-      console.log(`WebSocket ready state: ${socketRef.current.readyState}`);
-    }
-    return () => {
-      if (socketRef.current) {
-        socketRef.current.close();
+  // Function to load profiles from the server
+  const loadProfiles = () => {
+    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+      try {
+        socketRef.current.send('GET_PROFILES');
+      } catch (error) {
+        appendToDebugLog(`Error loading profiles: ${error}`);
       }
-    };
-  }, []);
+    } else {
+      appendToDebugLog('Cannot load profiles: WebSocket is not open.');
+    }
+  };
+
+
+// Function to create a new profile
+const createProfile = () => {
+  const profileName = prompt('Enter new profile name:');
+  if (profileName) {
+    socketRef.current?.send(`CREATE_PROFILE:${profileName}`);
+    setCurrentProfile(profileName);
+    setConfigArray([]); // Clear the bindings for the newly created profile
+    appendToDebugLog(`New profile created and switched to: ${profileName}`);
+  }
+};
+
+// Function to delete the current profile
+const deleteProfile = () => {
+  if (confirm(`Are you sure you want to delete profile '${currentProfile}'?`)) {
+    socketRef.current?.send(`DELETE_PROFILE:${currentProfile}`);
+
+    // Automatically switch to the next available profile after deletion
+    setProfiles((prev) => prev.filter((p) => p !== currentProfile));
+    
+    const newProfile = profiles.find((p) => p !== currentProfile) || null;
+
+    if (newProfile) {
+      setCurrentProfile(newProfile);
+      setConfigArray([]); // Clear the current bindings UI
+      socketRef.current?.send(`SWITCH_PROFILE:${newProfile}`);
+      loadConfig(); // Ensure the config is loaded after switching
+    } else {
+      setConfigArray([]); // Clear config array if no profiles are left
+    }
+  }
+};
+
+
+useEffect(() => {
+  console.log('useEffect hook is running');
+  
+  const lastProfile = localStorage.getItem('lastProfile');
+
+  startWebSocketConnection();
+
+  if (lastProfile) {
+    setCurrentProfile(lastProfile); // Set the last opened profile
+    socketRef.current?.send(`SWITCH_PROFILE:${lastProfile}`);
+    loadConfig(); // Load the config for the last opened profile
+  } else {
+    // No last profile found, proceed with default behavior
+    loadProfiles();
+  }
+
+  return () => {
+    if (socketRef.current) {
+      socketRef.current.close();
+    }
+  };
+}, []);
+
+  // If no current profile is selected, prompt the user to create one
+  if (!currentProfile) {
+    return (
+      <div
+        style={{
+          fontFamily: 'Roboto, sans-serif',
+          backgroundColor: '#1e2057',
+          color: '#ffffff',
+          padding: '10px',
+        }}
+      >
+        <div
+          style={{
+            marginBottom: '15px',
+            padding: '10px',
+            backgroundColor: '#2e2f77',
+            borderRadius: '5px',
+          }}
+        >
+          <p>No profiles available. Please create a new profile.</p>
+          <button
+            onClick={createProfile}
+            style={{
+              padding: '10px',
+              backgroundColor: '#4e52ff',
+              color: '#ffffff',
+              borderRadius: '2px',
+              border: 'none',
+              cursor: 'pointer',
+            }}
+          >
+            Create Profile
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -460,6 +725,95 @@ const Main: React.FC = () => {
         padding: '10px',
       }}
     >
+      {/* Profile Management UI */}
+      <div
+        style={{
+          marginBottom: '15px',
+          padding: '10px',
+          backgroundColor: '#2e2f77',
+          borderRadius: '5px',
+        }}
+      >
+        {profiles.length > 0 && currentProfile ? (
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+            }}
+          >
+            <div>
+              <label htmlFor="profile-select" style={{ marginRight: '10px' }}>
+                Profile:
+              </label>
+              <select
+                id="profile-select"
+                value={currentProfile}
+                onChange={(e) => switchProfile(e.target.value)}
+                style={{
+                  padding: '6px',
+                  backgroundColor: '#3e41a8',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: '2px',
+                  marginRight: '10px',
+                }}
+              >
+                {profiles.map((profile) => (
+                  <option key={profile} value={profile}>
+                    {profile}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={createProfile}
+                style={{
+                  padding: '6px',
+                  backgroundColor: '#4e52ff',
+                  color: '#ffffff',
+                  borderRadius: '2px',
+                  border: 'none',
+                  marginRight: '10px',
+                }}
+              >
+                New Profile
+              </button>
+              <button
+                onClick={deleteProfile}
+                style={{
+                  padding: '6px',
+                  backgroundColor: '#ff5b3b',
+                  color: '#ffffff',
+                  borderRadius: '2px',
+                  border: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                Delete Profile
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div>
+            <p>No profiles available. Please create a new profile.</p>
+            <button
+              onClick={createProfile}
+              style={{
+                padding: '10px',
+                backgroundColor: '#4e52ff',
+                color: '#ffffff',
+                borderRadius: '2px',
+                border: 'none',
+                cursor: 'pointer',
+              }}
+            >
+              Create Profile
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Add Binding Section */}
       <div
         style={{
           marginBottom: '15px',
