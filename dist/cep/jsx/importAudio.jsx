@@ -1,7 +1,3 @@
-
-
-
-
 function importAudioToTrack(filePath, initialTrackIndex, volume, pitch, debugMode) {
     var debugLog = "Debug Log:\n";
 
@@ -196,6 +192,12 @@ function findExistingAudioItem(project, filePath) {
 function applyPitchShifterToImportedAudio(pitch, addDebugMessage) {
     try {
         addDebugMessage("Starting applyPitchShifterToImportedAudio function");
+
+        // Skip applying pitch shifter if pitch is exactly 0
+        if (pitch === 0) {
+            addDebugMessage("Skipping pitch shifter - pitch value is 0");
+            return; // Early exit since we don't need to apply the pitch shift
+        }
 
         var sequence = app.project.activeSequence;
         if (!sequence) {
