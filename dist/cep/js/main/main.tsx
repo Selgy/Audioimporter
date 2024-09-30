@@ -42,6 +42,9 @@ const Main: React.FC = () => {
   const [keyBeingEdited, setKeyBeingEdited] = useState<string | null>(null);
   const [idBeingEdited, setIdBeingEdited] = useState<string | null>(null);
   const [isWebSocketReady, setIsWebSocketReady] = useState(false);
+  const [isProfilesLoaded, setIsProfilesLoaded] = useState(false); // <-- New state
+
+  const [loading, setLoading] = useState(false);
 
   // Profile management state variables
   const [profiles, setProfiles] = useState<string[]>([]);
@@ -129,10 +132,11 @@ const loadConfig = () => {
 
   if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
     console.log('Loading config for profile:', currentProfile);
+    setLoading(true); // Set loading to true before starting config load
     try {
-      // Load configuration for the current profile
       socketRef.current.send(`LOAD_CONFIG:${currentProfile}`);
     } catch (error: unknown) {
+      setLoading(false); // Stop loading in case of error
       if (error instanceof Error) {
         appendToDebugLog(`Error loading config: ${error.message}`);
       } else {
@@ -144,6 +148,7 @@ const loadConfig = () => {
     appendToDebugLog('Cannot load config: WebSocket is not open.');
   }
 };
+
 
 if (socketRef.current) {
   socketRef.current.onmessage = (event) => {
@@ -160,7 +165,6 @@ if (socketRef.current) {
         const configData = JSON.parse(data.replace('CONFIG:', '')) as {
           [key: string]: AudioBinding;
         };
-        // Convert the object to an array
         const configArray: KeyBinding[] = Object.entries(configData).map(([key, binding]) => ({
           id: uuidv4(), // Generate a new ID for each keybinding
           key: normalizeKeyCombination(key),
@@ -172,6 +176,7 @@ if (socketRef.current) {
         const combo = data.replace('COMBO:', '');
         appendToDebugLog(`Processed combo: ${combo}`);
 
+        // If we're listening for a key combo, either edit or add a new keybind
         if (isListeningForKeyRef.current) {
           if (isEditingRef.current && idBeingEditedRef.current) {
             editKeyBind(idBeingEditedRef.current, combo);
@@ -179,11 +184,17 @@ if (socketRef.current) {
             addNewKeyBind(combo);
           }
         } else {
-          handleCombo(combo);
+          handleCombo(combo); // Handle the combo if we're not in key listening mode
         }
       } else if (data.startsWith('PROFILES:')) {
         const profilesData = JSON.parse(data.replace('PROFILES:', '')) as string[];
         setProfiles(profilesData);
+
+        // If profiles are loaded, set the flag to true
+        setIsProfilesLoaded(true); // Ensure profiles are marked as loaded
+        appendToDebugLog('Profiles loaded');
+
+        // Automatically select the first profile if none is selected
         if (!currentProfile && profilesData.length > 0) {
           setCurrentProfile(profilesData[0]);
         }
@@ -197,16 +208,15 @@ if (socketRef.current) {
         setCurrentProfile(profileName);
         setConfigArray([]); // Clear the bindings for the newly created profile
         appendToDebugLog(`Profile created and switched to: ${profileName}`);
-    
       } else if (data.startsWith('PROFILE_DELETED:')) {
         const profileName = data.replace('PROFILE_DELETED:', '');
         setProfiles((prev) => prev.filter((p) => p !== profileName));
-        
+
         // Automatically switch to another profile if available
         if (currentProfile === profileName) {
           const newProfile = profiles.find((p) => p !== profileName) || null;
           setCurrentProfile(newProfile);
-          
+
           if (newProfile) {
             socketRef.current?.send(`SWITCH_PROFILE:${newProfile}`);
             setConfigArray([]); // Clear the current configArray before loading the new profile's config
@@ -216,7 +226,6 @@ if (socketRef.current) {
           }
         }
         appendToDebugLog(`Profile deleted: ${profileName}`);
-      
       } else if (data.startsWith('ERROR:')) {
         const errorMessage = data.replace('ERROR:', '');
         appendToDebugLog(`Error: ${errorMessage}`);
@@ -224,6 +233,8 @@ if (socketRef.current) {
     }
   };
 }
+
+
 
 
 const switchProfile = (profileName: string) => {
@@ -402,8 +413,8 @@ const saveConfig = (newConfigArray: KeyBinding[]) => {
     socketRef.current.onopen = () => {
       appendToDebugLog('Connected to Rust server');
       setIsWebSocketReady(true); // WebSocket is ready, update the state
-      
-      // After WebSocket is connected, you can safely load profiles or configs
+    
+      // Load profiles and config after WebSocket is connected
       loadProfiles();
       loadConfig();
     };
@@ -665,17 +676,15 @@ useEffect(() => {
   console.log('useEffect hook is running');
 
   const lastProfile = localStorage.getItem('lastProfile');
-
   startWebSocketConnection();
 
   const waitForWebSocket = () => {
     if (isWebSocketReady) {
       if (lastProfile) {
-        setCurrentProfile(lastProfile);  // Set the last opened profile
+        setCurrentProfile(lastProfile);
         socketRef.current?.send(`SWITCH_PROFILE:${lastProfile}`);
-        loadConfig(); // Load the config for the last opened profile
+        loadConfig();
       } else {
-        // No last profile found, proceed with default behavior
         loadProfiles();
       }
     } else {
@@ -688,7 +697,8 @@ useEffect(() => {
     if (isWebSocketReady) {
       clearInterval(checkWebSocketReady);
     }
-  }, 100); // Check every 100ms
+  }, 100);
+
 
   return () => {
     if (socketRef.current) {
@@ -696,6 +706,25 @@ useEffect(() => {
     }
   };
 }, [isWebSocketReady]); // Ensure this effect runs when WebSocket is ready
+
+
+// Ensure that WebSocket is ready and profiles are loaded before rendering
+if (!isWebSocketReady || !isProfilesLoaded) {
+  return (
+    <div
+      style={{
+        fontFamily: 'Roboto, sans-serif',
+        backgroundColor: '#1e2057',
+        color: '#ffffff',
+        padding: '10px',
+        textAlign: 'center',
+      }}
+    >
+      <div>Loading profiles, please wait...</div>
+    </div>
+  );
+}
+
 
 
   // If no current profile is selected, prompt the user to create one
@@ -745,366 +774,428 @@ useEffect(() => {
         padding: '10px',
       }}
     >
-      {/* Profile Management UI */}
-      <div
-        style={{
-          marginBottom: '15px',
-          padding: '10px',
-          backgroundColor: '#2e2f77',
-          borderRadius: '5px',
-        }}
-      >
-        {profiles.length > 0 && currentProfile ? (
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-            }}
-          >
-            <div>
-              <label htmlFor="profile-select" style={{ marginRight: '10px' }}>
-                Profile:
-              </label>
-              <select
-                id="profile-select"
-                value={currentProfile}
-                onChange={(e) => switchProfile(e.target.value)}
-                style={{
-                  padding: '6px',
-                  backgroundColor: '#3e41a8',
-                  color: '#ffffff',
-                  border: 'none',
-                  borderRadius: '2px',
-                  marginRight: '10px',
-                }}
-              >
-                {profiles.map((profile) => (
-                  <option key={profile} value={profile}>
-                    {profile}
-                  </option>
-                ))}
-              </select>
-              <button
-                onClick={createProfile}
-                style={{
-                  padding: '6px',
-                  backgroundColor: '#4e52ff',
-                  color: '#ffffff',
-                  borderRadius: '2px',
-                  border: 'none',
-                  marginRight: '10px',
-                }}
-              >
-                New Profile
-              </button>
-              <button
-                onClick={deleteProfile}
-                style={{
-                  padding: '6px',
-                  backgroundColor: '#ff5b3b',
-                  color: '#ffffff',
-                  borderRadius: '2px',
-                  border: 'none',
-                  cursor: 'pointer',
-                }}
-              >
-                Delete Profile
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div>
-            <p>No profiles available. Please create a new profile.</p>
-            <button
-              onClick={createProfile}
-              style={{
-                padding: '10px',
-                backgroundColor: '#4e52ff',
-                color: '#ffffff',
-                borderRadius: '2px',
-                border: 'none',
-                cursor: 'pointer',
-              }}
-            >
-              Create Profile
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Add Binding Section */}
-      <div
-        style={{
-          marginBottom: '15px',
-          padding: '10px',
-          backgroundColor: '#2e2f77',
-          borderRadius: '5px',
-        }}
-      >
+      {/* Loading Spinner or Profiles */}
+      {!isWebSocketReady || !isProfilesLoaded ? (
         <div
           style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
+            textAlign: 'center',
+            padding: '20px',
           }}
         >
-          <input
-            type="text"
-            readOnly
-            value={
-              isListeningForKey
-                ? isEditing
-                  ? `Editing ${keyBeingEdited || ''}: Press new key...`
-                  : 'Press a key combination...'
-                : 'Click Add Binding to start'
-            }
-            style={{
-              width: '250px',
-              padding: '6px',
-              backgroundColor: '#3e41a8',
-              color: '#ffffff',
-              border: 'none',
-              borderRadius: '2px',
-            }}
-          />
-          <button
-            onClick={addBinding}
-            disabled={isListeningForKey || isEditing}
-            style={{
-              width: '150px',
-              padding: '6px',
-              backgroundColor: isListeningForKey || isEditing ? '#2e3177' : '#4e52ff',
-              color: '#ffffff',
-              borderRadius: '2px',
-              border: 'none',
-              cursor: isListeningForKey || isEditing ? 'not-allowed' : 'pointer',
-            }}
-          >
-            {isListeningForKey ? 'Listening...' : 'Add Binding'}
-          </button>
-        </div>
-      </div>
-
-      {/* Hidden file input for audio selection */}
-      <input
-        type="file"
-        ref={fileInputRef}
-        style={{ display: 'none' }}
-        accept="audio/*"
-      />
-
-      {/* Keybind Rows */}
-      <div>
-        {configArray.map((keyBinding) => (
           <div
-            key={keyBinding.id}
             style={{
-              display: 'flex',
-              alignItems: 'center',
+              fontSize: '20px',
               marginBottom: '10px',
-              backgroundColor: '#2e2f77',
-              padding: '10px',
-              borderRadius: '5px',
             }}
           >
-            <button
-              onClick={() => deleteBinding(keyBinding.id)}
-              style={{
-                width: '30px',
-                height: '30px',
-                padding: '6px',
-                backgroundColor: 'transparent',
-                color: '#ff5b3b',
-                borderRadius: '50%',
-                border: 'none',
-                cursor: 'pointer',
-                fontSize: '16px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                marginRight: '10px',
-              }}
-            >
-              ✖
-            </button>
-            <input
-              type="text"
-              readOnly
-              value={keyBinding.key}
-              style={{
-                width: '70px',
-                padding: '6px',
-                backgroundColor: '#3e41a8',
-                color: '#ffffff',
-                border: 'none',
-                borderRadius: '2px',
-                marginRight: '10px',
-                textAlign: 'center',
-              }}
-            />
-            <button
-              onClick={() => editBinding(keyBinding.id, keyBinding.key)}
-              disabled={isListeningForKey || isEditing}
-              style={{
-                width: '50px',
-                padding: '6px',
-                backgroundColor: isListeningForKey || isEditing ? '#2e3177' : '#4e52ff',
-                color: '#ffffff',
-                borderRadius: '2px',
-                border: 'none',
-                marginRight: '10px',
-                cursor: isListeningForKey || isEditing ? 'not-allowed' : 'pointer',
-              }}
-            >
-              Edit
-            </button>
-            <select
-              value={keyBinding.binding.track}
-              onChange={(e) =>
-                updateBinding(keyBinding.id, { ...keyBinding.binding, track: e.target.value })
-              }
-              style={{
-                width: '70px',
-                padding: '6px',
-                backgroundColor: '#3e41a8',
-                color: '#ffffff',
-                border: 'none',
-                borderRadius: '2px',
-                marginRight: '10px',
-              }}
-            >
-              {Array.from({ length: 15 }, (_, i) => (
-                <option key={i} value={`A${i + 1}`}>
-                  A{i + 1}
-                </option>
-              ))}
-            </select>
-            <input
-              type="text"
-              readOnly
-              value={extractFileName(keyBinding.binding.path)}
-              style={{
-                width: '120px',
-                padding: '7px',
-                backgroundColor: '#3e41a8',
-                color: '#ffffff',
-                border: 'none',
-                borderRadius: '2px',
-                marginRight: '10px',
-              }}
-            />
-            <button
-              onClick={() => selectAudioFile(keyBinding.id)}
-              style={{
-                width: '120px',
-                padding: '6px',
-                backgroundColor: '#4e52ff',
-                color: '#ffffff',
-                borderRadius: '2px',
-                border: 'none',
-                marginRight: '10px',
-              }}
-            >
-              Audio...
-            </button>
-
-            {/* Volume Section */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                marginRight: '15px',
-                position: 'relative',
-              }}
-            >
-              <FaVolumeUp style={{ color: '#ffffff', marginRight: '10px' }} />
-              <div style={{ position: 'relative' }}>
-                <input
-                  type="number"
-                  value={keyBinding.binding.volume}
-                  onChange={(e) => handleNumberInput(keyBinding.id, 'volume', e.target.value)}
-                  style={{
-                    width: '40px',
-                    padding: '6px',
-                    backgroundColor: '#3e41a8',
-                    color: '#ffffff',
-                    border: 'none',
-                    borderRadius: '2px',
-                    textAlign: 'center',
-                  }}
-                />
-                <span
-                  style={{
-                    position: 'absolute',
-                    right: '6px',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    color: '#ffffff',
-                    fontSize: '12px',
-                    pointerEvents: 'none',
-                  }}
-                >
-                  dB
-                </span>
-              </div>
-            </div>
-
-            {/* Pitch Section */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                marginRight: '15px',
-                position: 'relative',
-              }}
-            >
-              <FaWaveSquare
-                style={{
-                  marginRight: '0px',
-                  marginLeft: '-15px',
-                  width: '40px',
-                  padding: '0px',
-                }}
-              />
-              <div style={{ position: 'relative' }}>
-                <input
-                  type="number"
-                  value={keyBinding.binding.pitch}
-                  onChange={(e) => handleNumberInput(keyBinding.id, 'pitch', e.target.value)}
-                  min="-12"
-                  max="12"
-                  step="1"
-                  style={{
-                    width: '40px',
-                    padding: '6px',
-                    backgroundColor: '#3e41a8',
-                    color: '#ffffff',
-                    border: 'none',
-                    borderRadius: '2px',
-                    textAlign: 'center',
-                  }}
-                />
-                <span
-                  style={{
-                    position: 'absolute',
-                    right: '6px',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    color: '#ffffff',
-                    fontSize: '12px',
-                    pointerEvents: 'none',
-                  }}
-                >
-                  st
-                </span>
-              </div>
-            </div>
+            Loading profiles, please wait...
           </div>
-        ))}
-      </div>
+          <div className="spinner" style={{ fontSize: '30px' }}>🔄</div> {/* Spinner Icon */}
+        </div>
+      ) : (
+        <>
+          {/* If no current profile is selected, prompt the user to create one */}
+          {!currentProfile ? (
+            <div
+              style={{
+                fontFamily: 'Roboto, sans-serif',
+                backgroundColor: '#1e2057',
+                color: '#ffffff',
+                padding: '10px',
+              }}
+            >
+              <div
+                style={{
+                  marginBottom: '15px',
+                  padding: '10px',
+                  backgroundColor: '#2e2f77',
+                  borderRadius: '5px',
+                }}
+              >
+                <p>No profiles available. Please create a new profile.</p>
+                <button
+                  onClick={createProfile}
+                  style={{
+                    padding: '10px',
+                    backgroundColor: '#4e52ff',
+                    color: '#ffffff',
+                    borderRadius: '2px',
+                    border: 'none',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Create Profile
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* Profile Management UI */}
+              <div
+                style={{
+                  marginBottom: '15px',
+                  padding: '10px',
+                  backgroundColor: '#2e2f77',
+                  borderRadius: '5px',
+                }}
+              >
+                {profiles.length > 0 && currentProfile ? (
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <div>
+                      <label htmlFor="profile-select" style={{ marginRight: '10px' }}>
+                        Profile:
+                      </label>
+                      <select
+                        id="profile-select"
+                        value={currentProfile}
+                        onChange={(e) => switchProfile(e.target.value)}
+                        style={{
+                          padding: '6px',
+                          backgroundColor: '#3e41a8',
+                          color: '#ffffff',
+                          border: 'none',
+                          borderRadius: '2px',
+                          marginRight: '10px',
+                        }}
+                      >
+                        {profiles.map((profile) => (
+                          <option key={profile} value={profile}>
+                            {profile}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={createProfile}
+                        style={{
+                          padding: '6px',
+                          backgroundColor: '#4e52ff',
+                          color: '#ffffff',
+                          borderRadius: '2px',
+                          border: 'none',
+                          marginRight: '10px',
+                        }}
+                      >
+                        New Profile
+                      </button>
+                      <button
+                        onClick={deleteProfile}
+                        style={{
+                          padding: '6px',
+                          backgroundColor: '#ff5b3b',
+                          color: '#ffffff',
+                          borderRadius: '2px',
+                          border: 'none',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Delete Profile
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <p>No profiles available. Please create a new profile.</p>
+                    <button
+                      onClick={createProfile}
+                      style={{
+                        padding: '10px',
+                        backgroundColor: '#4e52ff',
+                        color: '#ffffff',
+                        borderRadius: '2px',
+                        border: 'none',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Create Profile
+                    </button>
+                  </div>
+                )}
+              </div>
+  
+              {/* Add Binding Section */}
+              <div
+                style={{
+                  marginBottom: '15px',
+                  padding: '10px',
+                  backgroundColor: '#2e2f77',
+                  borderRadius: '5px',
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                  }}
+                >
+                  <input
+                    type="text"
+                    readOnly
+                    value={
+                      isListeningForKey
+                        ? isEditing
+                          ? `Editing ${keyBeingEdited || ''}: Press new key...`
+                          : 'Press a key combination...'
+                        : 'Click Add Binding to start'
+                    }
+                    style={{
+                      width: '250px',
+                      padding: '6px',
+                      backgroundColor: '#3e41a8',
+                      color: '#ffffff',
+                      border: 'none',
+                      borderRadius: '2px',
+                    }}
+                  />
+                  <button
+                    onClick={addBinding}
+                    disabled={isListeningForKey || isEditing}
+                    style={{
+                      width: '150px',
+                      padding: '6px',
+                      backgroundColor: isListeningForKey || isEditing ? '#2e3177' : '#4e52ff',
+                      color: '#ffffff',
+                      borderRadius: '2px',
+                      border: 'none',
+                      cursor: isListeningForKey || isEditing ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    {isListeningForKey ? 'Listening...' : 'Add Binding'}
+                  </button>
+                </div>
+              </div>
+  
+              {/* Hidden file input for audio selection */}
+              <input
+                type="file"
+                ref={fileInputRef}
+                style={{ display: 'none' }}
+                accept="audio/*"
+              />
+  
+              {/* Keybind Rows */}
+              <div>
+                {configArray.map((keyBinding) => (
+                  <div
+                    key={keyBinding.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      marginBottom: '10px',
+                      backgroundColor: '#2e2f77',
+                      padding: '10px',
+                      borderRadius: '5px',
+                    }}
+                  >
+                    <button
+                      onClick={() => deleteBinding(keyBinding.id)}
+                      style={{
+                        width: '30px',
+                        height: '30px',
+                        padding: '6px',
+                        backgroundColor: 'transparent',
+                        color: '#ff5b3b',
+                        borderRadius: '50%',
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontSize: '16px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        marginRight: '10px',
+                      }}
+                    >
+                      ✖
+                    </button>
+                    <input
+                      type="text"
+                      readOnly
+                      value={keyBinding.key}
+                      style={{
+                        width: '70px',
+                        padding: '6px',
+                        backgroundColor: '#3e41a8',
+                        color: '#ffffff',
+                        border: 'none',
+                        borderRadius: '2px',
+                        marginRight: '10px',
+                        textAlign: 'center',
+                      }}
+                    />
+                    <button
+                      onClick={() => editBinding(keyBinding.id, keyBinding.key)}
+                      disabled={isListeningForKey || isEditing}
+                      style={{
+                        width: '50px',
+                        padding: '6px',
+                        backgroundColor: isListeningForKey || isEditing ? '#2e3177' : '#4e52ff',
+                        color: '#ffffff',
+                        borderRadius: '2px',
+                        border: 'none',
+                        marginRight: '10px',
+                        cursor: isListeningForKey || isEditing ? 'not-allowed' : 'pointer',
+                      }}
+                    >
+                      Edit
+                    </button>
+                    <select
+                      value={keyBinding.binding.track}
+                      onChange={(e) =>
+                        updateBinding(keyBinding.id, { ...keyBinding.binding, track: e.target.value })
+                      }
+                      style={{
+                        width: '70px',
+                        padding: '6px',
+                        backgroundColor: '#3e41a8',
+                        color: '#ffffff',
+                        border: 'none',
+                        borderRadius: '2px',
+                        marginRight: '10px',
+                      }}
+                    >
+                      {Array.from({ length: 15 }, (_, i) => (
+                        <option key={i} value={`A${i + 1}`}>
+                          A{i + 1}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      type="text"
+                      readOnly
+                      value={extractFileName(keyBinding.binding.path)}
+                      style={{
+                        width: '120px',
+                        padding: '7px',
+                        backgroundColor: '#3e41a8',
+                        color: '#ffffff',
+                        border: 'none',
+                        borderRadius: '2px',
+                        marginRight: '10px',
+                      }}
+                    />
+                    <button
+                      onClick={() => selectAudioFile(keyBinding.id)}
+                      style={{
+                        width: '120px',
+                        padding: '6px',
+                        backgroundColor: '#4e52ff',
+                        color: '#ffffff',
+                        borderRadius: '2px',
+                        border: 'none',
+                        marginRight: '10px',
+                      }}
+                    >
+                      Audio...
+                    </button>
+  
+                    {/* Volume Section */}
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        marginRight: '15px',
+                        position: 'relative',
+                      }}
+                    >
+                      <FaVolumeUp style={{ color: '#ffffff', marginRight: '10px' }} />
+                      <div style={{ position: 'relative' }}>
+                        <input
+                          type="number"
+                          value={keyBinding.binding.volume}
+                          onChange={(e) => handleNumberInput(keyBinding.id, 'volume', e.target.value)}
+                          style={{
+                            width: '40px',
+                            padding: '6px',
+                            backgroundColor: '#3e41a8',
+                            color: '#ffffff',
+                            border: 'none',
+                            borderRadius: '2px',
+                            textAlign: 'center',
+                          }}
+                        />
+                        <span
+                          style={{
+                            position: 'absolute',
+                            right: '6px',
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            color: '#ffffff',
+                            fontSize: '12px',
+                            pointerEvents: 'none',
+                          }}
+                        >
+                          dB
+                        </span>
+                      </div>
+                    </div>
+  
+                    {/* Pitch Section */}
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        marginRight: '15px',
+                        position: 'relative',
+                      }}
+                    >
+                      <FaWaveSquare
+                        style={{
+                          marginRight: '0px',
+                          marginLeft: '-15px',
+                          width: '40px',
+                          padding: '0px',
+                        }}
+                      />
+                      <div style={{ position: 'relative' }}>
+                        <input
+                          type="number"
+                          value={keyBinding.binding.pitch}
+                          onChange={(e) => handleNumberInput(keyBinding.id, 'pitch', e.target.value)}
+                          min="-12"
+                          max="12"
+                          step="1"
+                          style={{
+                            width: '40px',
+                            padding: '6px',
+                            backgroundColor: '#3e41a8',
+                            color: '#ffffff',
+                            border: 'none',
+                            borderRadius: '2px',
+                            textAlign: 'center',
+                          }}
+                        />
+                        <span
+                          style={{
+                            position: 'absolute',
+                            right: '6px',
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            color: '#ffffff',
+                            fontSize: '12px',
+                            pointerEvents: 'none',
+                          }}
+                        >
+                          st
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </>
+      )}
     </div>
   );
+  
+  
 };
 
 console.log('Exporting Main component');

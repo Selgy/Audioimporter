@@ -1,4 +1,7 @@
 
+
+
+
 function importAudioToTrack(filePath, initialTrackIndex, volume, pitch, debugMode) {
     var debugLog = "Debug Log:\n";
 
