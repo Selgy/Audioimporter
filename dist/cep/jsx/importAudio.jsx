@@ -1,10 +1,11 @@
+
 function importAudioToTrack(filePath, initialTrackIndex, volume, pitch, debugMode) {
     var debugLog = "Debug Log:\n";
 
     function addDebugMessage(message) {
         debugLog += message + "\n";
         if (debugMode) {
-            $.writeln(message);  // This writes to the ExtendScript Toolkit console
+            $.writeln(message);
         }
     }
 
@@ -28,20 +29,29 @@ function importAudioToTrack(filePath, initialTrackIndex, volume, pitch, debugMod
         var framesPerSecond = Math.round(1 / frameRate);
         addDebugMessage("Debug 4: Frame rate: " + framesPerSecond + " fps");
 
-        var importArray = [filePath];
-        var importSuccessful = project.importFiles(importArray, 1, project.rootItem, 0);
-        if (!importSuccessful) {
-            throw new Error("Import failed");
-        }
-        addDebugMessage("Debug 5: File imported");
+        // Find existing audio item
+        var existingItem = findExistingAudioItem(project, filePath);
+        var audioItem;
 
-        var importedItem = project.rootItem.children[project.rootItem.children.numItems - 1];
-        if (!importedItem) {
-            throw new Error("Import item not found");
+        if (existingItem) {
+            addDebugMessage("Debug 5: Existing audio item found: " + existingItem.name);
+            audioItem = existingItem;
+        } else {
+            addDebugMessage("Debug 5: Importing new audio file");
+            var importArray = [filePath];
+            var importSuccessful = project.importFiles(importArray, 1, project.rootItem, 0);
+            if (!importSuccessful) {
+                throw new Error("Import failed");
+            }
+            audioItem = project.rootItem.children[project.rootItem.children.numItems - 1];
         }
-        addDebugMessage("Debug 6: Imported item found - Name: " + importedItem.name + ", Type: " + importedItem.type);
 
-        var metadata = importedItem.getProjectMetadata();
+        if (!audioItem) {
+            throw new Error("Audio item not found");
+        }
+        addDebugMessage("Debug 6: Audio item to use - Name: " + audioItem.name + ", Type: " + audioItem.type);
+
+        var metadata = audioItem.getProjectMetadata();
         addDebugMessage("Debug 7: Metadata retrieved");
         
         var durationMatch = metadata.match(/<premierePrivateProjectMetaData:Column\.Intrinsic\.MediaDuration>(.*?)<\/premierePrivateProjectMetaData:Column\.Intrinsic\.MediaDuration>/);
@@ -93,7 +103,7 @@ function importAudioToTrack(filePath, initialTrackIndex, volume, pitch, debugMod
 
         var newClip;
         try {
-            newClip = audioTrack.insertClip(importedItem, insertTime);
+            newClip = audioTrack.insertClip(audioItem, insertTime);
             if (!newClip) {
                 throw new Error("insertClip returned null or undefined");
             }
@@ -110,19 +120,19 @@ function importAudioToTrack(filePath, initialTrackIndex, volume, pitch, debugMod
             throw new Error("Failed to insert clip - " + insertError.toString());
         }
 
-        addDebugMessage("Debug 17a: Received pitch value: " + pitch);
+        addDebugMessage("Debug 15: Received pitch value: " + pitch);
 
         try {
             $.sleep(100);  // Wait for the clip to be fully inserted
             setClipVolume(volume, addDebugMessage);
-            addDebugMessage("Debug 17: Clip volume set to " + volume + " dB");
+            addDebugMessage("Debug 16: Clip volume set to " + volume + " dB");
             
-            addDebugMessage("Debug 18: Attempting to apply pitch shift");
+            addDebugMessage("Debug 17: Attempting to apply pitch shift");
             if (pitch !== undefined && pitch !== null) {
-                applyPitchShifterToImportedAudio(pitch, addDebugMessage);  // Pass addDebugMessage here
-                addDebugMessage("Debug 19: Pitch shift applied");
+                applyPitchShifterToImportedAudio(pitch, addDebugMessage);
+                addDebugMessage("Debug 18: Pitch shift applied");
             } else {
-                addDebugMessage("Debug 19a: Skipping pitch shift - pitch value is undefined or null");
+                addDebugMessage("Debug 18a: Skipping pitch shift - pitch value is undefined or null");
             }
 
         } catch (audioError) {
@@ -133,7 +143,6 @@ function importAudioToTrack(filePath, initialTrackIndex, volume, pitch, debugMod
             throw audioError;
         }
 
-        // At the end of the function, add this alert:
         addDebugMessage("Import Audio Debug Log:\n" + debugLog);
 
         return JSON.stringify({
@@ -149,10 +158,7 @@ function importAudioToTrack(filePath, initialTrackIndex, volume, pitch, debugMod
         if (e.stack) {
             addDebugMessage("Error stack: " + e.stack);
         }
-        // Remove the alert
-        // alert("Error occurred in importAudioToTrack:\n" + e.toString() + "\n\nDebug Log:\n" + debugLog);
 
-        // Return the error as a JSON string
         return JSON.stringify({
             success: false,
             message: "Error in importAudioToTrack: " + e.toString(),
@@ -160,6 +166,29 @@ function importAudioToTrack(filePath, initialTrackIndex, volume, pitch, debugMod
         });
     }
 }
+
+function findExistingAudioItem(project, filePath) {
+    // Extract the file name from the path
+    var fileName = filePath.split('\\').pop().split('/').pop();
+    
+    function searchInBin(bin) {
+        for (var i = 0; i < bin.children.numItems; i++) {
+            var item = bin.children[i];
+            if (item.type === ProjectItemType.CLIP && item.name === fileName) {
+                return item;
+            } else if (item.type === ProjectItemType.BIN) {
+                var foundItem = searchInBin(item);
+                if (foundItem) return foundItem;
+            }
+        }
+        return null;
+    }
+    
+    return searchInBin(project.rootItem);
+}
+
+
+
 
 function applyPitchShifterToImportedAudio(pitch, addDebugMessage) {
     try {
