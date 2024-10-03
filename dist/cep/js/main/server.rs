@@ -151,6 +151,15 @@ async fn handle_incoming_messages(
                 // Call the `handle_delete_profile` function to delete the profile
                 handle_delete_profile(profile_name, Arc::clone(&config), Arc::clone(&write)).await;
             }
+            else if text == "LOAD_CONFIG" {
+                let config_guard = config.lock().await;
+                let config_str = serde_json::to_string(&*config_guard).expect("Failed to serialize config");
+                let mut write_guard = write.lock().await;
+                let _ = write_guard
+                    .send(Message::Text(format!("CONFIG:{}", config_str)))
+                    .await;
+                println!("Sent CONFIG message to client");
+            }
             // Handle loading the configuration
             else if text.starts_with("LOAD_CONFIG:") {
                 let profile_name = text.replace("LOAD_CONFIG:", "");
@@ -325,6 +334,9 @@ fn load_config() -> Value {
     }
     if !config["currentProfile"].is_string() {
         config["currentProfile"] = Value::Null; // Set to null
+    }
+    if !config["lastSelectedProfile"].is_string() {
+        config["lastSelectedProfile"] = Value::Null; // Set to null
     }
 
     config

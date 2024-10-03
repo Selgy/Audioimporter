@@ -6,6 +6,14 @@ export interface AudioBinding {
   importInMiddle: boolean;
 }
 
-export interface Config {
+export interface ProfileConfig {
   [key: string]: AudioBinding;
+}
+
+export interface Config {
+  currentProfile: string;
+  lastSelectedProfile: string;
+  profiles: {
+    [profileName: string]: ProfileConfig;
+  };
 }

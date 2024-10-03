@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Config, AudioBinding } from './types';
+import { Config, AudioBinding, ProfileConfig } from './types';
 import path from 'path';
-
 declare global {
     interface Window {
         __adobe_cep__: {
@@ -12,10 +11,18 @@ declare global {
 
 const Settings: React.FC = () => {
     const socketRef = useRef<WebSocket | null>(null);
-    const configRef = useRef<Config>({});
-    const [config, setConfig] = useState<Config>({});
+    const configRef = useRef<Config>({
+        currentProfile: '',
+        lastSelectedProfile: '',
+        profiles: {}
+    });
+    const [config, setConfig] = useState<Config>({
+        currentProfile: '',
+        lastSelectedProfile: '',
+        profiles: {}
+    });
     const [debugLog, setDebugLog] = useState<string[]>([]);
-
+    const [lastSelectedProfile, setLastSelectedProfile] = useState<string | null>(null);
     useEffect(() => {
         console.log('useEffect hook is running');
         startWebSocketConnection();
@@ -46,12 +53,19 @@ const Settings: React.FC = () => {
                         handleCombo(combo).catch(error => {
                             appendToDebugLog(`Error in handleCombo: ${error}`);
                         });
+                    } else if (data.startsWith("LAST_SELECTED_PROFILE:")) {
+                        const profile = data.replace("LAST_SELECTED_PROFILE:", "");
+                        setLastSelectedProfile(profile);
+                        appendToDebugLog(`Last selected profile set to: ${profile}`);
                     }
                 }
             };
         }
     }, []);
 
+
+
+    
     useEffect(() => {
         const intervalId = setInterval(reconnectWebSocket, 5000);
         return () => clearInterval(intervalId);
@@ -96,8 +110,12 @@ const Settings: React.FC = () => {
     };
 
     const loadConfig = () => {
+        appendToDebugLog("loadConfig called");
         try {
             socketRef.current?.send('LOAD_CONFIG');
+            appendToDebugLog("Sent LOAD_CONFIG message");
+            socketRef.current?.send('GET_LAST_SELECTED_PROFILE');
+            appendToDebugLog("Sent GET_LAST_SELECTED_PROFILE message");
         } catch (error: unknown) {
             console.error('Error loading config:', error);
             sendLogToPanel(`Error loading config: ${error}`);
@@ -111,27 +129,52 @@ const Settings: React.FC = () => {
         }
     };
 
-    const fetchLatestConfig = (): Promise<Config> => {
+    const fetchLatestConfig = (): Promise<[Config, string | null]> => {
         return new Promise((resolve, reject) => {
-          if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-            const messageHandler = (event: MessageEvent) => {
-              const data = event.data;
-              if (typeof data === 'string' && data.startsWith("CONFIG:")) {
-                const configData = JSON.parse(data.replace("CONFIG:", ""));
-                socketRef.current?.removeEventListener('message', messageHandler);
-                configRef.current = configData; // Update the configRef
-                setConfig(configData); // Update the state
-                resolve(configData);
-              }
-            };
-            socketRef.current.addEventListener('message', messageHandler);
-            socketRef.current.send('LOAD_CONFIG');
-          } else {
-            reject(new Error("WebSocket is not connected"));
-          }
+            if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+                let configData: Config | null = null;
+                let lastProfile: string | null = null;
+    
+                const messageHandler = (event: MessageEvent) => {
+                    const data = event.data;
+                    if (typeof data === 'string') {
+                        if (data.startsWith("CONFIG:")) {
+                            configData = JSON.parse(data.replace("CONFIG:", ""));
+                            appendToDebugLog(`Received CONFIG: ${JSON.stringify(configData, null, 2)}`);
+                        } else if (data.startsWith("LAST_SELECTED_PROFILE:")) {
+                            lastProfile = data.replace("LAST_SELECTED_PROFILE:", "").trim();
+                            appendToDebugLog(`Received LAST_SELECTED_PROFILE: ${lastProfile}`);
+                        }
+    
+                        if (configData !== null && lastProfile !== null) {
+                            socketRef.current?.removeEventListener('message', messageHandler);
+                            configRef.current = configData;
+                            setConfig(configData);
+                            setLastSelectedProfile(lastProfile);
+                            resolve([configData, lastProfile]);
+                        }
+                    }
+                };
+    
+                socketRef.current.addEventListener('message', messageHandler);
+                socketRef.current.send('LOAD_CONFIG');
+                appendToDebugLog("Sent LOAD_CONFIG message");
+                socketRef.current.send('GET_LAST_SELECTED_PROFILE');
+                appendToDebugLog("Sent GET_LAST_SELECTED_PROFILE message");
+    
+                // Add a timeout to reject the promise if we don't receive both messages
+                setTimeout(() => {
+                    socketRef.current?.removeEventListener('message', messageHandler);
+                    appendToDebugLog("Timeout while fetching config and profile");
+                    appendToDebugLog(`Config received: ${configData !== null}`);
+                    appendToDebugLog(`Last profile received: ${lastProfile !== null}`);
+                    reject(new Error("Timeout while fetching config and profile"));
+                }, 5000); // 5 second timeout
+            } else {
+                reject(new Error("WebSocket is not connected"));
+            }
         });
-      };
-      
+    };
 
     // Add the normalizeKeyCombination function
     const normalizeKeyCombination = (keyCombination: string): string => {
@@ -178,51 +221,72 @@ const Settings: React.FC = () => {
     const handleCombo = async (combo: string) => {
         appendToDebugLog(`Handling combo: ${combo}`);
         
+        let latestConfig: Config;
+        let profile: string | null;
+    
         try {
-            const latestConfig = await fetchLatestConfig();
+            [latestConfig, profile] = await fetchLatestConfig();
             appendToDebugLog(`Fetched latest config: ${JSON.stringify(latestConfig, null, 2)}`);
-            
-            if (Object.keys(latestConfig).length === 0) {
-                appendToDebugLog(`Config is empty, no bindings to process`);
-                return;
-            }
-
-            // Normalize the incoming combo
-            const normalizedCombo = normalizeKeyCombination(combo);
-            appendToDebugLog(`Normalized combo: ${normalizedCombo}`);
-
-            // Normalize the config keys
-            const normalizedConfig: Config = Object.fromEntries(
-                Object.entries(latestConfig).map(([key, value]) => [
-                    normalizeKeyCombination(key),
-                    value
-                ])
-            );
-
-            appendToDebugLog(`Normalized config: ${JSON.stringify(normalizedConfig, null, 2)}`);
-
-            if (normalizedConfig[normalizedCombo]) {
-                const binding: AudioBinding = normalizedConfig[normalizedCombo];
-                appendToDebugLog(`Found binding for combo: ${normalizedCombo}`);
-
-                if (binding.path) {
-                    appendToDebugLog(`Executing script for path: ${binding.path}, track: ${binding.track}, volume: ${binding.volume}dB, and pitch: ${binding.pitch} semitones`);
-                    executePremiereProScript(
-                        binding.path, 
-                        parseInt(binding.track.replace('A', ''), 10), 
-                        binding.volume,
-                        binding.pitch || 0 // Provide a default value of 0 if pitch is undefined
-                    );
-                } else {
-                    appendToDebugLog(`No path specified for combo: ${normalizedCombo}`);
-                }
-            } else {
-                appendToDebugLog(`Combo ${normalizedCombo} not found in config. Skipping execution.`);
-            }
+            appendToDebugLog(`Current profile: ${profile}`);
         } catch (error) {
-            appendToDebugLog(`Error handling combo: ${error}`);
+            appendToDebugLog(`Error fetching latest config: ${error}. Using current state.`);
+            latestConfig = configRef.current;
+            profile = lastSelectedProfile;
+            appendToDebugLog(`Using config: ${JSON.stringify(latestConfig, null, 2)}`);
+            appendToDebugLog(`Using profile: ${profile}`);
+        }
+    
+        if (!profile) {
+            appendToDebugLog(`No profile selected, skipping combo execution`);
+            return;
+        }
+    
+        if (!latestConfig.profiles || !latestConfig.profiles[profile]) {
+            appendToDebugLog(`Selected profile ${profile} not found in config, skipping combo execution`);
+            return;
+        }
+    
+        const profileConfig = latestConfig.profiles[profile];
+    
+        if (Object.keys(profileConfig).length === 0) {
+            appendToDebugLog(`Config for profile ${profile} is empty, no bindings to process`);
+            return;
+        }
+    
+        // Normalize the incoming combo
+        const normalizedCombo = normalizeKeyCombination(combo);
+        appendToDebugLog(`Normalized combo: ${normalizedCombo}`);
+    
+        // Normalize the config keys
+        const normalizedConfig: ProfileConfig = Object.fromEntries(
+            Object.entries(profileConfig).map(([key, value]) => [
+                normalizeKeyCombination(key),
+                value
+            ])
+        );
+    
+        appendToDebugLog(`Normalized config for profile ${profile}: ${JSON.stringify(normalizedConfig, null, 2)}`);
+    
+        if (normalizedConfig[normalizedCombo]) {
+            const binding: AudioBinding = normalizedConfig[normalizedCombo];
+            appendToDebugLog(`Found binding for combo: ${normalizedCombo}`);
+    
+            if (binding.path) {
+                appendToDebugLog(`Executing script for path: ${binding.path}, track: ${binding.track}, volume: ${binding.volume}dB, and pitch: ${binding.pitch} semitones`);
+                executePremiereProScript(
+                    binding.path, 
+                    parseInt(binding.track.replace('A', ''), 10), 
+                    binding.volume,
+                    binding.pitch || 0 // Provide a default value of 0 if pitch is undefined
+                );
+            } else {
+                appendToDebugLog(`No path specified for combo: ${normalizedCombo}`);
+            }
+        } else {
+            appendToDebugLog(`Combo ${normalizedCombo} not found in config for profile ${profile}. Skipping execution.`);
         }
     };
+
 
     const executePremiereProScript = (filePath: string, track: number, volume: number, pitch: number) => {
         appendToDebugLog(`Executing script with parameters: filePath=${filePath}, track=${track}, volume=${volume}, pitch=${pitch}`);
