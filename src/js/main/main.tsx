@@ -43,7 +43,7 @@ const Main: React.FC = () => {
   const [idBeingEdited, setIdBeingEdited] = useState<string | null>(null);
   const [isWebSocketReady, setIsWebSocketReady] = useState(false);
   const [isProfilesLoaded, setIsProfilesLoaded] = useState(false);
-  
+  const [lastSelectedProfile, setLastSelectedProfile] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   // Profile management state variables
@@ -150,7 +150,8 @@ const Main: React.FC = () => {
   const switchProfile = (profileName: string) => {
     appendToDebugLog(`Switching profile to: ${profileName}`);
     if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-      setCurrentProfile(profileName);
+      setCurrentProfile(profileName);  // Set current profile state
+      lastProfileRef.current = profileName;  // Also update the last profile ref
       appendToDebugLog(`Profile set: ${profileName}`);
       setConfigArray([]);  // Clear bindings UI before loading the new profile's bindings
   
@@ -160,42 +161,48 @@ const Main: React.FC = () => {
       appendToDebugLog('WebSocket is not initialized or ready.');
     }
   };
+  
+  
+  const saveConfig = (newConfigArray: KeyBinding[]) => {
+    // Ensure the current profile is selected before proceeding
+    const activeProfile = currentProfile || lastProfileRef.current;
 
-// Function to save configuration specific to the current profile
-const saveConfig = (newConfigArray: KeyBinding[]) => {
-  if (!currentProfile) {
-    appendToDebugLog('Cannot save config: No current profile selected.');
-    return;
-  }
-
-  if (!socketRef.current) {
-    appendToDebugLog('WebSocket is not initialized.');
-    return;
-  }
-
-  const configObject = newConfigArray.reduce((obj, keyBinding) => {
-    obj[keyBinding.key] = keyBinding.binding;
-    return obj;
-  }, {} as { [key: string]: AudioBinding });
-
-  try {
-    appendToDebugLog(`Sending config to server for profile ${currentProfile}: ${JSON.stringify(configObject)}`);
-    const message = JSON.stringify({
-      profile: currentProfile,  // Ensure the correct profile is included
-      config: configObject,
-    });
-    socketRef.current.send(`SAVE_CONFIG:${message}`);
-    appendToDebugLog('Config sent successfully');
-    setConfigArray(newConfigArray);  // Update the local state
-  } catch (error: unknown) {
-    if (error instanceof Error) {
-      appendToDebugLog(`Error saving config: ${error.message}`);
-    } else {
-      appendToDebugLog(`Unexpected error saving config.`);
+    if (!activeProfile) {
+        appendToDebugLog('Cannot save config: No current profile selected.');
+        return;
     }
-  }
+
+    if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) {
+        appendToDebugLog('WebSocket is not initialized or not ready.');
+        return;
+    }
+
+    const configObject = newConfigArray.reduce((obj, keyBinding) => {
+        obj[keyBinding.key] = keyBinding.binding;
+        return obj;
+    }, {} as { [key: string]: AudioBinding });
+
+    try {
+        appendToDebugLog(`Sending config to server for profile ${activeProfile}: ${JSON.stringify(configObject)}`);
+        
+        const message = JSON.stringify({
+            profile: activeProfile,  // Ensure the correct profile is included
+            config: configObject,
+        });
+
+        socketRef.current.send(`SAVE_CONFIG:${message}`);
+        appendToDebugLog('Config sent successfully');
+        setConfigArray(newConfigArray);  // Update the local state
+    } catch (error: unknown) {
+        if (error instanceof Error) {
+            appendToDebugLog(`Error saving config: ${error.message}`);
+        } else {
+            appendToDebugLog('Unexpected error saving config.');
+        }
+    }
 };
 
+  
 
 
 
@@ -234,38 +241,54 @@ const saveConfig = (newConfigArray: KeyBinding[]) => {
     }
   };
 
-// Function to edit an existing key binding
-const editKeyBind = (id: string, newCombo: string) => {
-  appendToDebugLog(`Editing key binding with id ${id} to ${newCombo}`);
-  const normalizedNewCombo = normalizeKeyCombination(newCombo);
-
-  setConfigArray((prevConfig) => {
-    if (prevConfig.some((kb) => kb.key === normalizedNewCombo)) {
-      appendToDebugLog(`Key combination ${normalizedNewCombo} already exists in config.`);
-      stopListening();
-      return prevConfig;
+  const editKeyBind = (id: string, newCombo: string) => {
+    appendToDebugLog(`Editing key binding with id ${id} to ${newCombo}`);
+  
+    // Use currentProfile or fallback to lastProfileRef.current
+    const activeProfile = currentProfile || lastProfileRef.current;
+    
+    if (!activeProfile) {
+      appendToDebugLog('Cannot edit binding: No current profile selected.');
+      stopListening();  // Stop listening if profile is missing
+      return;
     }
+  
+    const normalizedNewCombo = normalizeKeyCombination(newCombo);
+  
+    setConfigArray((prevConfig) => {
+      if (prevConfig.some((kb) => kb.key === normalizedNewCombo && kb.id !== id)) {
+        appendToDebugLog(`Key combination ${normalizedNewCombo} already exists in config.`);
+        stopListening();  // Stop listening if the combo already exists
+        return prevConfig;
+      }
+  
+      const index = prevConfig.findIndex((kb) => kb.id === id);
+      if (index === -1) {
+        appendToDebugLog(`Keybinding with id ${id} not found in config.`);
+        stopListening();  // Stop listening if no binding is found
+        return prevConfig;
+      }
+  
+      const newConfig = [...prevConfig];
+      newConfig[index] = { ...newConfig[index], key: normalizedNewCombo };
+  
+      appendToDebugLog(`Config after editing: ${JSON.stringify(newConfig)}`);
+  
+      saveConfig(newConfig);  // Save the new configuration
+      stopListening();  // Stop the listener after editing
+      setIsEditing(false);
+      setKeyBeingEdited(null);
+      setIdBeingEdited(null);
+  
+      return newConfig;
+    });
+  };
+  
+  
+  
 
-    const index = prevConfig.findIndex((kb) => kb.id === id);
-    if (index === -1) {
-      appendToDebugLog(`Keybinding with id ${id} not found in config.`);
-      stopListening();
-      return prevConfig;
-    }
-
-    const newConfig = [...prevConfig];
-    newConfig[index] = { ...newConfig[index], key: normalizedNewCombo };
-
-    appendToDebugLog(`Config after editing: ${JSON.stringify(newConfig)}`);
-    saveConfig(newConfig);
-    stopListening();
-    setIsEditing(false);
-    setKeyBeingEdited(null);
-    setIdBeingEdited(null);
-    return newConfig;
-  });
-};
-
+  
+  
 
   // Function to handle incoming key combinations
   const handleCombo = (combo: string) => {
@@ -278,37 +301,47 @@ const editKeyBind = (id: string, newCombo: string) => {
     }
   };
 
-// Function to add a new key binding
-const addNewKeyBind = useCallback(
-  (keyCombination: string) => {
-    appendToDebugLog(`Detected key combination: ${keyCombination}`);
-    const normalizedCombination = normalizeKeyCombination(keyCombination);
-    appendToDebugLog(`Normalized key combination: ${normalizedCombination}`);
-
-    setConfigArray((prevConfig) => {
-      if (prevConfig.some((kb) => kb.key === normalizedCombination)) {
-        appendToDebugLog(`Key combination ${normalizedCombination} already exists in config.`);
-        stopListening();
-        return prevConfig;
+  const addNewKeyBind = useCallback(
+    (keyCombination: string) => {
+      appendToDebugLog(`Detected key combination: ${keyCombination}`);
+      const normalizedCombination = normalizeKeyCombination(keyCombination);
+      appendToDebugLog(`Normalized key combination: ${normalizedCombination}`);
+  
+      // Ensure that the correct profile is being used
+      const activeProfile = currentProfile || lastProfileRef.current;
+  
+      if (!activeProfile) {
+        appendToDebugLog('Cannot add new binding: No current profile selected.');
+        return;
       }
-
-      const newKeyBinding: KeyBinding = {
-        id: uuidv4(),
-        key: normalizedCombination,
-        binding: { volume: 0, pitch: 0, track: 'A1', path: '' },
-      };
-
-      const newConfig = [...prevConfig, newKeyBinding];
-
-      appendToDebugLog(`New config before saving: ${JSON.stringify(newConfig)}`);
-      saveConfig(newConfig);
-      appendToDebugLog(`Key binding ${normalizedCombination} added to config.`);
-      stopListening();
-      return newConfig;
-    });
-  },
-  [appendToDebugLog, saveConfig, stopListening]
-);
+  
+      setConfigArray((prevConfig) => {
+        if (prevConfig.some((kb) => kb.key === normalizedCombination)) {
+          appendToDebugLog(`Key combination ${normalizedCombination} already exists in config.`);
+          stopListening();
+          return prevConfig;
+        }
+  
+        const newKeyBinding: KeyBinding = {
+          id: uuidv4(),
+          key: normalizedCombination,
+          binding: { volume: 0, pitch: 0, track: 'A1', path: '' },
+        };
+  
+        const newConfig = [...prevConfig, newKeyBinding];
+  
+        appendToDebugLog(`New config before saving: ${JSON.stringify(newConfig)}`);
+        saveConfig(newConfig); // Save the new config
+        appendToDebugLog(`Key binding ${normalizedCombination} added to config.`);
+  
+        stopListening(); // Stop listening after adding the binding
+        return newConfig;
+      });
+    },
+    [appendToDebugLog, saveConfig, stopListening, currentProfile]
+  );
+  
+  
 
 useEffect(() => {
   console.log('useEffect hook is running');
@@ -334,14 +367,11 @@ function startWebSocketConnection() {
 
   socketRef.current.onopen = () => {
     appendToDebugLog('Connected to server');
-    setIsWebSocketReady(true);  // WebSocket is ready, update the state
-
-    // Call loadProfiles here
+    setIsWebSocketReady(true);  // Ensure this is set
     loadProfiles();
-
-    // Other requests to load data
     socketRef.current?.send('GET_LAST_SELECTED_PROFILE');
   };
+  
 
   socketRef.current.onerror = (error) => {
     appendToDebugLog(`WebSocket Error: ${error}`);
@@ -359,101 +389,132 @@ function startWebSocketConnection() {
   };
 
   socketRef.current.onmessage = (event) => {
-    console.log('Received message from server:', event.data);
     const data = event.data;
     appendToDebugLog(`Received message: ${data}`);
+
+    if (data.startsWith('PROFILE_SWITCHED:')) {
+      const profileName = data.replace('PROFILE_SWITCHED:', '');
+      setCurrentProfile(profileName);  // Update the state
+      lastProfileRef.current = profileName;  // Also update the ref for fallback
+      appendToDebugLog(`Profile switched to: ${profileName}`);
+  }
   
-    if (typeof data === 'string') {
-      // Handle different WebSocket message types
-      if (data.startsWith('CONFIG:')) {
-        appendToDebugLog(`Received CONFIG for profile ${currentProfile}`);
-        
+    // Handle configuration message
+    if (data.startsWith('CONFIG:')) {
         try {
-          const configData = JSON.parse(data.replace('CONFIG:', '')) as {
-            [key: string]: AudioBinding;
-          };
-          appendToDebugLog(`Parsed config data: ${JSON.stringify(configData)}`);
-          
-          const configArray: KeyBinding[] = Object.entries(configData).map(([key, binding]) => ({
-            id: uuidv4(),
-            key: normalizeKeyCombination(key),
-            binding,
-          }));
-          appendToDebugLog(`Converted config array: ${JSON.stringify(configArray)}`);
-          
-          setConfigArray(configArray);
-          appendToDebugLog('Config loaded and converted to array successfully');
+            // Parse the config data
+            const configData = JSON.parse(data.replace('CONFIG:', ''));
+
+            appendToDebugLog(`Parsed config data: ${JSON.stringify(configData)}`);
+
+            // Ensure that `binding` is typed as `AudioBinding`
+            const configArray: KeyBinding[] = Object.entries(configData).map(([key, binding]) => ({
+                id: uuidv4(),
+                key: normalizeKeyCombination(key),
+                binding: binding as AudioBinding, // Explicitly cast `binding` to `AudioBinding`
+            }));
+
+            appendToDebugLog(`Converted config array: ${JSON.stringify(configArray)}`);
+
+            setConfigArray(configArray); // This should now work correctly
+            appendToDebugLog('Config loaded and converted to array successfully');
         } catch (error) {
-          appendToDebugLog(`Error parsing CONFIG message: ${error}`);
+            appendToDebugLog(`Error parsing CONFIG message: ${error}`);
         }
-      
-      } else if (data.startsWith('COMBO:')) {
-        const combo = data.replace('COMBO:', '');
-        appendToDebugLog(`Processed combo: ${combo}`);
-  
-        // If we're listening for a key combo, either edit or add a new keybind
-        if (isListeningForKeyRef.current) {
-          if (isEditingRef.current && idBeingEditedRef.current) {
-            editKeyBind(idBeingEditedRef.current, combo);
-          } else {
-            addNewKeyBind(combo);
-          }
-        } else {
-          handleCombo(combo); // Handle the combo if we're not in key listening mode
-        }
-      } else if (data.startsWith('PROFILES:')) {
-        const profilesData = JSON.parse(data.replace('PROFILES:', '')) as string[];
+    }
+
+    // Handle profiles list message
+    if (data.startsWith('PROFILES:')) {
+        const profilesData = JSON.parse(data.replace('PROFILES:', ''));
         setProfiles(profilesData);
-  
-        // If profiles are loaded, set the flag to true
-        setIsProfilesLoaded(true);
+        setIsProfilesLoaded(true);  // Ensure this is set to true
         appendToDebugLog('Profiles loaded');
-      } else if (data.startsWith('LAST_SELECTED_PROFILE:')) {
-        const lastProfile = data.replace('LAST_SELECTED_PROFILE:', '').trim();
-  
-        if (lastProfile && lastProfile !== 'None') {
-          // Set the last selected profile in the ref and state
-          lastProfileRef.current = lastProfile;
-          setCurrentProfile(lastProfile);
-          appendToDebugLog(`Restored last selected profile: ${lastProfile}`);
-          socketRef.current?.send(`SWITCH_PROFILE:${lastProfile}`);
+    }
+
+
+    // Handle last selected profile message
+    if (data.startsWith('LAST_SELECTED_PROFILE:')) {
+      const lastProfile = data.replace('LAST_SELECTED_PROFILE:', '').trim();
+      if (lastProfile && lastProfile !== 'None') {
+        setCurrentProfile(lastProfile);  // Update state
+        lastProfileRef.current = lastProfile;  // Also update the ref for fallback
+        appendToDebugLog(`Restored last selected profile: ${lastProfile}`);
+        socketRef.current?.send(`SWITCH_PROFILE:${lastProfile}`);  // Switch to the last selected profile
+      } else {
+        appendToDebugLog('No last selected profile found');
+      }
+    }
+
+    if (data.startsWith('COMBO:')) {
+      const combo = data.replace('COMBO:', '');
+      appendToDebugLog(`Processed combo: ${combo}`);
+    
+      // Ensure correct profile is being used
+      const activeProfile = currentProfile || lastProfileRef.current;
+    
+      if (!activeProfile) {
+        appendToDebugLog('Cannot process combo: No current profile selected.');
+        stopListening();
+        return;
+      }
+    
+      // If listening for a key combo, handle the key binding edit or addition
+      if (isListeningForKeyRef.current) {
+        if (isEditingRef.current && idBeingEditedRef.current) {
+          editKeyBind(idBeingEditedRef.current, combo);  // Use edit logic
         } else {
-          appendToDebugLog('No last selected profile found');
+          addNewKeyBind(combo);  // Use add logic
         }
-      } else if (data.startsWith('PROFILE_SWITCHED:')) {
-        const profileName = data.replace('PROFILE_SWITCHED:', '');
-        appendToDebugLog(`Profile switched to: ${profileName}`);
-        setCurrentProfile(profileName);
-      } else if (data.startsWith('PROFILE_CREATED:')) {
+        stopListening();  // Stop listening after handling the combo
+      } else {
+        handleCombo(combo);  // Handle the combo if not in key listening mode
+      }
+    }
+    
+
+    // Handle profile creation
+    if (data.startsWith('PROFILE_CREATED:')) {
         const profileName = data.replace('PROFILE_CREATED:', '');
         setProfiles((prev) => [...prev, profileName]);
         setCurrentProfile(profileName);
         setConfigArray([]); // Clear the bindings for the newly created profile
         appendToDebugLog(`Profile created and switched to: ${profileName}`);
-      } else if (data.startsWith('PROFILE_DELETED:')) {
+    }
+
+    // Handle profile deletion
+    if (data.startsWith('PROFILE_DELETED:')) {
         const profileName = data.replace('PROFILE_DELETED:', '');
         setProfiles((prev) => prev.filter((p) => p !== profileName));
-      
+
         // Automatically switch to another profile if available
         if (currentProfile === profileName) {
-          const newProfile = profiles.find((p) => p !== profileName) || null;
-          setCurrentProfile(newProfile);
-      
-          if (newProfile) {
-            socketRef.current?.send(`SWITCH_PROFILE:${newProfile}`);
-            setConfigArray([]); // Clear the current configArray before loading the new profile's config
-            loadConfig(newProfile); // Pass the newProfile as an argument
-          } else {
-            setConfigArray([]); // If no profiles left, clear the configArray
-          }
+            const newProfile = profiles.find((p) => p !== profileName) || null;
+            setCurrentProfile(newProfile);
+
+            if (newProfile) {
+                socketRef.current?.send(`SWITCH_PROFILE:${newProfile}`);
+                setConfigArray([]); // Clear configArray before loading new profile's config
+                loadConfig(newProfile); // Pass new profile as argument
+            } else {
+                setConfigArray([]); // Clear configArray if no profiles left
+            }
         }
         appendToDebugLog(`Profile deleted: ${profileName}`);
-      } else if (data.startsWith('ERROR:')) {
+    }
+
+    // Handle errors
+    if (data.startsWith('ERROR:')) {
         const errorMessage = data.replace('ERROR:', '');
         appendToDebugLog(`Error: ${errorMessage}`);
-      }
     }
-  };
+};
+
+  
+  
+  
+
+  
+  
 }
 
 
@@ -548,6 +609,7 @@ function startWebSocketConnection() {
       loadConfig(currentProfile);
     }
   }, [currentProfile, isWebSocketReady, loadConfig]);
+  
 
 
 

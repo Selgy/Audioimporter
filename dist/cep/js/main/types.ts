@@ -3,9 +3,17 @@ export interface AudioBinding {
   pitch: number;
   track: string;
   path: string;
-  importInMiddle?: boolean;
+  importInMiddle: boolean;
+}
+
+export interface ProfileConfig {
+  [key: string]: AudioBinding;
 }
 
 export interface Config {
-  [key: string]: AudioBinding;
+  currentProfile: string;
+  lastSelectedProfile: string;
+  profiles: {
+    [profileName: string]: ProfileConfig;
+  };
 }
