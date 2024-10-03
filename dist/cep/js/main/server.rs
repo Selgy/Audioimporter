@@ -152,13 +152,11 @@ async fn handle_incoming_messages(
                 handle_delete_profile(profile_name, Arc::clone(&config), Arc::clone(&write)).await;
             }
             // Handle loading the configuration
-            else if text == "LOAD_CONFIG" {
+            else if text.starts_with("LOAD_CONFIG:") {
+                let profile_name = text.replace("LOAD_CONFIG:", "");
                 let config_guard = config.lock().await;
-                if let Some(current_profile) = config_guard["currentProfile"].as_str() {
-                    let keybindings = config_guard["profiles"][current_profile].clone();
-                    let config_str =
-                        serde_json::to_string(&keybindings).expect("Failed to serialize config");
-
+                if let Some(keybindings) = config_guard["profiles"].get(&profile_name) {
+                    let config_str = serde_json::to_string(keybindings).expect("Failed to serialize config");
                     let mut write_guard = write.lock().await;
                     let _ = write_guard
                         .send(Message::Text(format!("CONFIG:{}", config_str)))
@@ -166,10 +164,10 @@ async fn handle_incoming_messages(
                 } else {
                     let mut write_guard = write.lock().await;
                     let _ = write_guard
-                        .send(Message::Text(
-                            "ERROR:No current profile selected. Please create a profile."
-                                .to_string(),
-                        ))
+                        .send(Message::Text(format!(
+                            "ERROR:Profile '{}' does not exist or has no configuration",
+                            profile_name
+                        )))
                         .await;
                 }
             }
@@ -177,10 +175,18 @@ async fn handle_incoming_messages(
             else if text.starts_with("SAVE_LAST_SELECTED_PROFILE:") {
                 let profile_name = text.replace("SAVE_LAST_SELECTED_PROFILE:", "");
                 let mut config_guard = config.lock().await;
+                
+                // Save the last selected profile
                 config_guard["lastSelectedProfile"] = serde_json::Value::String(profile_name.clone());
-
+                
+                // Also update currentProfile if it exists
+                if config_guard["profiles"][&profile_name].is_object() {
+                    config_guard["currentProfile"] = serde_json::Value::String(profile_name.clone());
+                }
+                
                 save_config(&config_guard);
-            } 
+            }
+
             // Handle requesting the last selected profile
             else if text == "GET_LAST_SELECTED_PROFILE" {
                 let config_guard = config.lock().await;
@@ -213,32 +219,27 @@ async fn handle_incoming_messages(
                     .send(Message::Text(format!("PROFILES:{}", profiles_str)))
                     .await;
             }
-            // Handle switching profiles
             else if text.starts_with("SWITCH_PROFILE:") {
                 let profile_name = text.replace("SWITCH_PROFILE:", "");
                 let mut config_guard = config.lock().await;
-
+            
                 if config_guard["profiles"][&profile_name].is_object() {
-                    // Clear previous keybindings before switching
                     config_guard["currentProfile"] = serde_json::Value::String(profile_name.clone());
-
-                    // Clear old keybindings
-                    let _ = tx.send("CLEAR_BINDINGS".to_string());
-
+            
                     save_config(&config_guard);
-
-                    // Send new keybindings to the client after the profile switch
-                    let keybindings = config_guard["profiles"][&profile_name].clone();
-                    let config_str =
-                        serde_json::to_string(&keybindings).expect("Failed to serialize config");
-
+            
                     let mut write_guard = write.lock().await;
-                    let _ = write_guard
-                        .send(Message::Text(format!("CONFIG:{}", config_str)))
-                        .await;
-
+                    
+                    // Send PROFILE_SWITCHED message first
                     let _ = write_guard
                         .send(Message::Text(format!("PROFILE_SWITCHED:{}", profile_name)))
+                        .await;
+            
+                    // Then send the CONFIG message
+                    let keybindings = config_guard["profiles"][&profile_name].clone();
+                    let config_str = serde_json::to_string(&keybindings).expect("Failed to serialize config");
+                    let _ = write_guard
+                        .send(Message::Text(format!("CONFIG:{}", config_str)))
                         .await;
                 } else {
                     let mut write_guard = write.lock().await;
