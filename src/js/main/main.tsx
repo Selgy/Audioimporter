@@ -45,7 +45,11 @@ const Main: React.FC = () => {
   const [isProfilesLoaded, setIsProfilesLoaded] = useState(false);
   const [lastSelectedProfile, setLastSelectedProfile] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-
+  const path = window.electron ? require('path') : null;
+  const os = require('os');
+  const isMac = os.platform() === 'darwin';
+  const isWindows = os.platform() === 'win32';
+  
   // Profile management state variables
   const [profiles, setProfiles] = useState<string[]>([]);
   const [currentProfile, setCurrentProfile] = useState<string | null>(null);
@@ -556,7 +560,6 @@ function startWebSocketConnection() {
     }
   };
 
-  // Function to select an audio file
   const selectAudioFile = (id: string) => {
     appendToDebugLog(`Attempting to select audio file for id: ${id}`);
     if (fileInputRef.current) {
@@ -567,9 +570,8 @@ function startWebSocketConnection() {
         const file = (event.target as HTMLInputElement).files?.[0];
         if (file) {
           appendToDebugLog(`File selected: ${file.name}`);
-          const filePath = (file as any).path || file.name;
+          const filePath = path ? path.resolve((file as any).path || file.name) : file.name; // Cross-platform path handling
           appendToDebugLog(`File path resolved to: ${filePath}`);
-          // Update the config with the selected file path
           const keyBinding = configArray.find((kb) => kb.id === id);
           if (keyBinding) {
             updateBinding(id, { ...keyBinding.binding, path: filePath });
@@ -583,6 +585,7 @@ function startWebSocketConnection() {
       appendToDebugLog('File input reference is not available.');
     }
   };
+  
 
   // Function to delete a binding
   const deleteBinding = (id: string) => {
@@ -613,10 +616,11 @@ function startWebSocketConnection() {
 
 
 
-  // Function to extract the file name from a path
   const extractFileName = (filePath: string): string => {
-    return filePath?.split('\\').pop()?.split('/').pop() || ''; // Handles both Windows and Unix-style paths
+    if (!path) return filePath;  // Return raw path if `path` is not available (i.e., in a web environment)
+    return path.basename(filePath); // Use `path.basename` for cross-platform compatibility
   };
+  
 
   // Function to handle number input changes
   const handleNumberInput = useCallback(
