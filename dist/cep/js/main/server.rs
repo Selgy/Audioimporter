@@ -312,14 +312,21 @@ async fn handle_key_events(
 }
 
 fn get_config_path() -> PathBuf {
-    let appdata_dir = env::var("APPDATA").expect("Failed to get APPDATA environment variable");
-    let config_path = PathBuf::from(appdata_dir).join("AudioImporter").join("config.json");
+    let config_path = if cfg!(target_os = "windows") {
+        let appdata_dir = env::var("APPDATA").expect("Failed to get APPDATA environment variable");
+        PathBuf::from(appdata_dir).join("AudioImporter").join("config.json")
+    } else {
+        let home_dir = env::var("HOME").expect("Failed to get HOME environment variable");
+        PathBuf::from(home_dir).join("Library").join("Application Support").join("AudioImporter").join("config.json")
+    };
 
     // Ensure the directory exists
     fs::create_dir_all(config_path.parent().unwrap()).expect("Failed to create config directory");
 
     config_path
 }
+
+
 
 fn load_config() -> Value {
     let config_path = get_config_path();

@@ -294,9 +294,14 @@ const Settings: React.FC = () => {
         const jsxRelativePath = './jsx/importAudio.jsx';
         const jsxFullPath = path.resolve(__dirname, jsxRelativePath);
     
-        // Ensure paths are correctly formatted for JSX
-        const formattedJsxPath = jsxFullPath.replace(/\\/g, '\\\\');
-        const formattedFilePath = filePath.replace(/\\/g, '\\\\');
+        // Handle Windows-specific backslashes in paths
+        const formattedJsxPath = process.platform === 'win32' 
+            ? jsxFullPath.replace(/\\/g, '\\\\') 
+            : jsxFullPath;
+    
+        const formattedFilePath = process.platform === 'win32' 
+            ? filePath.replace(/\\/g, '\\\\') 
+            : filePath;
     
         const script = `
             try {
@@ -340,6 +345,7 @@ const Settings: React.FC = () => {
             appendToDebugLog("window.__adobe_cep__.evalScript is not available");
         }
     };
+    
 
     const sendLogToPanel = (message: string) => {
         if (window.electron && window.electron.ipcRenderer) {

@@ -100,6 +100,8 @@ const Main: React.FC = () => {
       RControl: 'Ctrl',
       ControlLeft: 'Ctrl',
       ControlRight: 'Ctrl',
+      MetaLeft: 'Cmd', // macOS Command key
+      MetaRight: 'Cmd', // macOS Command key
       Numpad1: '1',
       Numpad2: '2',
       Numpad3: '3',
