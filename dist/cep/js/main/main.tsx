@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { FaVolumeUp, FaWaveSquare } from 'react-icons/fa';
 import { v4 as uuidv4 } from 'uuid';
-
+import './styles.css';
 // Define your types
 interface AudioBinding {
   path: string;
@@ -784,250 +784,101 @@ if (!isWebSocketReady || !isProfilesLoaded) {
   }
 
   return (
-    <div
-      style={{
-        fontFamily: 'Roboto, sans-serif',
-        backgroundColor: '#1e2057',
-        color: '#ffffff',
-        padding: '10px',
-      }}
-    >
+    <div className="main-container">
       {/* Loading Spinner or Profiles */}
       {!isWebSocketReady || !isProfilesLoaded ? (
-        <div
-          style={{
-            textAlign: 'center',
-            padding: '20px',
-          }}
-        >
-          <div
-            style={{
-              fontSize: '20px',
-              marginBottom: '10px',
-            }}
-          >
-            Loading profiles, please wait...
-          </div>
-          <div className="spinner" style={{ fontSize: '30px' }}>🔄</div> {/* Spinner Icon */}
+        <div className="spinner-container">
+          <div className="spinner-message">Loading profiles, please wait...</div>
+          <div className="spinner">🔄</div> {/* Spinner Animation */}
         </div>
       ) : (
         <>
           {/* If no current profile is selected, prompt the user to create one */}
           {!currentProfile ? (
-            <div
-              style={{
-                fontFamily: 'Roboto, sans-serif',
-                backgroundColor: '#1e2057',
-                color: '#ffffff',
-                padding: '10px',
-              }}
-            >
-              <div
-                style={{
-                  marginBottom: '15px',
-                  padding: '10px',
-                  backgroundColor: '#2e2f77',
-                  borderRadius: '5px',
-                }}
-              >
+            <div className="profile-section">
+              <div>
                 <p>No profiles available. Please create a new profile.</p>
-                <button
-                  onClick={createProfile}
-                  style={{
-                    padding: '10px',
-                    backgroundColor: '#4e52ff',
-                    color: '#ffffff',
-                    borderRadius: '2px',
-                    border: 'none',
-                    cursor: 'pointer',
-                  }}
-                >
+                <button className="button" onClick={createProfile}>
                   Create Profile
                 </button>
               </div>
             </div>
           ) : (
             <>
-              {/* Profile Management UI */}
-              <div
-                style={{
-                  marginBottom: '15px',
-                  padding: '10px',
-                  backgroundColor: '#2e2f77',
-                  borderRadius: '5px',
-                }}
-              >
-                {profiles.length > 0 && currentProfile ? (
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                    }}
-                  >
-                    <div>
-                      <label htmlFor="profile-select" style={{ marginRight: '10px' }}>
-                        Profile:
-                      </label>
-                      <select
-                        id="profile-select"
-                        value={currentProfile}
-                        onChange={(e) => switchProfile(e.target.value)}
-                        style={{
-                          padding: '6px',
-                          backgroundColor: '#3e41a8',
-                          color: '#ffffff',
-                          border: 'none',
-                          borderRadius: '2px',
-                          marginRight: '10px',
-                        }}
-                      >
-                        {profiles.map((profile) => (
-                          <option key={profile} value={profile}>
-                            {profile}
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        onClick={createProfile}
-                        style={{
-                          padding: '6px',
-                          backgroundColor: '#4e52ff',
-                          color: '#ffffff',
-                          borderRadius: '2px',
-                          border: 'none',
-                          marginRight: '10px',
-                        }}
-                      >
-                        New Profile
-                      </button>
-                      <button
-                        onClick={deleteProfile}
-                        style={{
-                          padding: '6px',
-                          backgroundColor: '#ff5b3b',
-                          color: '#ffffff',
-                          borderRadius: '2px',
-                          border: 'none',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        Delete Profile
-                      </button>
-                    </div>
-                  </div>
-                ) : (
+              {/* Profile Management Section */}
+              <div className="profile-section">
+                <div className="profile-select-wrapper">
                   <div>
-                    <p>No profiles available. Please create a new profile.</p>
-                    <button
-                      onClick={createProfile}
-                      style={{
-                        padding: '10px',
-                        backgroundColor: '#4e52ff',
-                        color: '#ffffff',
-                        borderRadius: '2px',
-                        border: 'none',
-                        cursor: 'pointer',
-                      }}
+                    <label htmlFor="profile-select" style={{ marginRight: '10px' }}>
+                      Profile:
+                    </label>
+                    <select
+                      id="profile-select"
+                      value={currentProfile}
+                      onChange={(e) => switchProfile(e.target.value)}
+                      className="track-select"
                     >
-                      Create Profile
+                      {profiles.map((profile) => (
+                        <option key={profile} value={profile}>
+                          {profile}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      className="button"
+                      onClick={createProfile}
+                    >
+                      New Profile
+                    </button>
+                    <button
+                      className="button"
+                      style={{ backgroundColor: '#ff5b3b' }}
+                      onClick={deleteProfile}
+                    >
+                      Delete Profile
                     </button>
                   </div>
-                )}
-              </div>
-  
-              {/* Add Binding Section */}
-              <div
-                style={{
-                  marginBottom: '15px',
-                  padding: '10px',
-                  backgroundColor: '#2e2f77',
-                  borderRadius: '5px',
-                }}
-              >
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                  }}
-                >
-                  <input
-                    type="text"
-                    readOnly
-                    value={
-                      isListeningForKey
-                        ? isEditing
-                          ? `Editing ${keyBeingEdited || ''}: Press new key...`
-                          : 'Press a key combination...'
-                        : 'Click Add Binding to start'
-                    }
-                    style={{
-                      width: '250px',
-                      padding: '6px',
-                      backgroundColor: '#3e41a8',
-                      color: '#ffffff',
-                      border: 'none',
-                      borderRadius: '2px',
-                    }}
-                  />
-                  <button
-                    onClick={addBinding}
-                    disabled={isListeningForKey || isEditing}
-                    style={{
-                      width: '150px',
-                      padding: '6px',
-                      backgroundColor: isListeningForKey || isEditing ? '#2e3177' : '#4e52ff',
-                      color: '#ffffff',
-                      borderRadius: '2px',
-                      border: 'none',
-                      cursor: isListeningForKey || isEditing ? 'not-allowed' : 'pointer',
-                    }}
-                  >
-                    {isListeningForKey ? 'Listening...' : 'Add Binding'}
-                  </button>
                 </div>
               </div>
-  
+
+              {/* Add Binding Section */}
+              <div className="add-binding-container">
+                <input
+                  type="text"
+                  readOnly
+                  value={
+                    isListeningForKey
+                      ? isEditing
+                        ? `Editing ${keyBeingEdited || ''}: Press new key...`
+                        : 'Press a key combination...'
+                      : 'Click Add Binding to start'
+                  }
+                  className="key-binding-input"
+                />
+                <button
+                  className="button"
+                  onClick={addBinding}
+                  disabled={isListeningForKey || isEditing}
+                >
+                  {isListeningForKey ? 'Listening...' : 'Add Binding'}
+                </button>
+              </div>
+
               {/* Hidden file input for audio selection */}
               <input
                 type="file"
                 ref={fileInputRef}
-                style={{ display: 'none' }}
+                className="file-input"
                 accept="audio/*"
               />
-  
+
               {/* Keybind Rows */}
               <div>
                 {configArray.map((keyBinding) => (
-                  <div
-                    key={keyBinding.id}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      marginBottom: '10px',
-                      backgroundColor: '#2e2f77',
-                      padding: '10px',
-                      borderRadius: '5px',
-                    }}
-                  >
+                  <div key={keyBinding.id} className="binding-card">
                     <button
+                      className="delete-button"
                       onClick={() => deleteBinding(keyBinding.id)}
-                      style={{
-                        width: '30px',
-                        height: '30px',
-                        padding: '6px',
-                        backgroundColor: 'transparent',
-                        color: '#ff5b3b',
-                        borderRadius: '50%',
-                        border: 'none',
-                        cursor: 'pointer',
-                        fontSize: '16px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        marginRight: '10px',
-                      }}
                     >
                       ✖
                     </button>
@@ -1035,30 +886,12 @@ if (!isWebSocketReady || !isProfilesLoaded) {
                       type="text"
                       readOnly
                       value={keyBinding.key}
-                      style={{
-                        width: '70px',
-                        padding: '6px',
-                        backgroundColor: '#3e41a8',
-                        color: '#ffffff',
-                        border: 'none',
-                        borderRadius: '2px',
-                        marginRight: '10px',
-                        textAlign: 'center',
-                      }}
+                      className="key-binding-input"
                     />
                     <button
+                      className="button"
                       onClick={() => editBinding(keyBinding.id, keyBinding.key)}
                       disabled={isListeningForKey || isEditing}
-                      style={{
-                        width: '50px',
-                        padding: '6px',
-                        backgroundColor: isListeningForKey || isEditing ? '#2e3177' : '#4e52ff',
-                        color: '#ffffff',
-                        borderRadius: '2px',
-                        border: 'none',
-                        marginRight: '10px',
-                        cursor: isListeningForKey || isEditing ? 'not-allowed' : 'pointer',
-                      }}
                     >
                       Edit
                     </button>
@@ -1067,15 +900,7 @@ if (!isWebSocketReady || !isProfilesLoaded) {
                       onChange={(e) =>
                         updateBinding(keyBinding.id, { ...keyBinding.binding, track: e.target.value })
                       }
-                      style={{
-                        width: '70px',
-                        padding: '6px',
-                        backgroundColor: '#3e41a8',
-                        color: '#ffffff',
-                        border: 'none',
-                        borderRadius: '2px',
-                        marginRight: '10px',
-                      }}
+                      className="track-select"
                     >
                       {Array.from({ length: 15 }, (_, i) => (
                         <option key={i} value={`A${i + 1}`}>
@@ -1087,121 +912,40 @@ if (!isWebSocketReady || !isProfilesLoaded) {
                       type="text"
                       readOnly
                       value={extractFileName(keyBinding.binding.path)}
-                      style={{
-                        width: '120px',
-                        padding: '7px',
-                        backgroundColor: '#3e41a8',
-                        color: '#ffffff',
-                        border: 'none',
-                        borderRadius: '2px',
-                        marginRight: '10px',
-                      }}
+                      className="key-binding-input"
                     />
                     <button
+                      className="button"
                       onClick={() => selectAudioFile(keyBinding.id)}
-                      style={{
-                        width: '120px',
-                        padding: '6px',
-                        backgroundColor: '#4e52ff',
-                        color: '#ffffff',
-                        borderRadius: '2px',
-                        border: 'none',
-                        marginRight: '10px',
-                      }}
                     >
                       Audio...
                     </button>
-  
+
                     {/* Volume Section */}
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        marginRight: '15px',
-                        position: 'relative',
-                      }}
-                    >
-                      <FaVolumeUp style={{ color: '#ffffff', marginRight: '10px' }} />
-                      <div style={{ position: 'relative' }}>
-                        <input
-                          type="number"
-                          value={keyBinding.binding.volume}
-                          onChange={(e) => handleNumberInput(keyBinding.id, 'volume', e.target.value)}
-                          style={{
-                            width: '40px',
-                            padding: '6px',
-                            backgroundColor: '#3e41a8',
-                            color: '#ffffff',
-                            border: 'none',
-                            borderRadius: '2px',
-                            textAlign: 'center',
-                          }}
-                        />
-                        <span
-                          style={{
-                            position: 'absolute',
-                            right: '6px',
-                            top: '50%',
-                            transform: 'translateY(-50%)',
-                            color: '#ffffff',
-                            fontSize: '12px',
-                            pointerEvents: 'none',
-                          }}
-                        >
-                          dB
-                        </span>
-                      </div>
-                    </div>
-  
-                    {/* Pitch Section */}
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        marginRight: '15px',
-                        position: 'relative',
-                      }}
-                    >
-                      <FaWaveSquare
-                        style={{
-                          marginRight: '0px',
-                          marginLeft: '-15px',
-                          width: '40px',
-                          padding: '0px',
-                        }}
+                    <div className="input-wrapper">
+                      <span className="volume-icon">🔊</span> {/* Volume icon */}
+                      <input
+                        type="number"
+                        value={keyBinding.binding.volume}
+                        onChange={(e) => handleNumberInput(keyBinding.id, 'volume', e.target.value)}
+                        className="number-input"
                       />
-                      <div style={{ position: 'relative' }}>
-                        <input
-                          type="number"
-                          value={keyBinding.binding.pitch}
-                          onChange={(e) => handleNumberInput(keyBinding.id, 'pitch', e.target.value)}
-                          min="-12"
-                          max="12"
-                          step="1"
-                          style={{
-                            width: '40px',
-                            padding: '6px',
-                            backgroundColor: '#3e41a8',
-                            color: '#ffffff',
-                            border: 'none',
-                            borderRadius: '2px',
-                            textAlign: 'center',
-                          }}
-                        />
-                        <span
-                          style={{
-                            position: 'absolute',
-                            right: '6px',
-                            top: '50%',
-                            transform: 'translateY(-50%)',
-                            color: '#ffffff',
-                            fontSize: '12px',
-                            pointerEvents: 'none',
-                          }}
-                        >
-                          st
-                        </span>
-                      </div>
+                      <span className="input-label">dB</span>
+                    </div>
+
+                    {/* Pitch Section */}
+                    <div className="input-wrapper">
+                      <span className="wave-square-icon">🌀</span> {/* WaveSquare icon */}
+                      <input
+                        type="number"
+                        value={keyBinding.binding.pitch}
+                        onChange={(e) => handleNumberInput(keyBinding.id, 'pitch', e.target.value)}
+                        min="-12"
+                        max="12"
+                        step="1"
+                        className="number-input"
+                      />
+                      <span className="input-label">st</span>
                     </div>
                   </div>
                 ))}
@@ -1212,9 +956,6 @@ if (!isWebSocketReady || !isProfilesLoaded) {
       )}
     </div>
   );
-  
-  
 };
 
-console.log('Exporting Main component');
 export default Main;

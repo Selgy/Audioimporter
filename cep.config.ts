@@ -68,7 +68,7 @@ const config: CEP_Config = {
   installModules: [],
   copyAssets: [
     "./target/release/audio_importer.exe",
-    "./target/release/audio_importer",
+
     "./js",
     "./jsx",
   ],
