@@ -88,6 +88,26 @@ body {
     cursor: not-allowed;
 }
 
+/* Updated styles for fade transition */
+.fade-transition {
+    transition: opacity 0.1s ease-in-out;
+    opacity: 1;
+}
+
+.fade-transition.fade-out {
+    opacity: 0;
+}
+
+.binding-list-fade {
+    transition: opacity 0.1s ease-in-out;
+    opacity: 1;
+}
+
+.binding-list-fade.fade-out {
+    opacity: 0;
+}
+
+
 /* Key Binding Input */
 .key-binding-input {
     width: 100px;  /* Adjusted width for better balance */
@@ -110,15 +130,16 @@ body {
     align-items: center;
     margin-bottom: 10px;
     background-color: #2e2f77;
-    padding: 8px;  /* Reduced padding for compactness */
+    padding: 8px;
     border-radius: 6px;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
-    gap: 8px;  /* Consistent gap between elements */
-    transition: transform 0.2s;
+    gap: 8px;
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
 }
 
 .binding-card:hover {
-    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    transform: translateY(-1px);
 }
 
 /* Delete Button */

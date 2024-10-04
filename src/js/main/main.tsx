@@ -49,6 +49,8 @@ const Main: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const path = window.electron ? require('path') : null;
   const os = require('os');
+  const [isTransitioning, setIsTransitioning] = useState(false);
+
   // Instead of using Node's `os` module, use `navigator` to determine the platform
   const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
   const isWindows = navigator.platform.toUpperCase().indexOf('WIN') >= 0;
@@ -156,21 +158,29 @@ const Main: React.FC = () => {
   }, [currentProfile]);
 
 
-  const switchProfile = (profileName: string) => {
+  const switchProfile = useCallback((profileName: string) => {
     appendToDebugLog(`Switching profile to: ${profileName}`);
     if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-      setCurrentProfile(profileName);  // Set current profile state
-      lastProfileRef.current = profileName;  // Also update the last profile ref
-      appendToDebugLog(`Profile set: ${profileName}`);
-      setConfigArray([]);  // Clear bindings UI before loading the new profile's bindings
-  
-      socketRef.current.send(`SAVE_LAST_SELECTED_PROFILE:${profileName}`);
-      socketRef.current.send(`SWITCH_PROFILE:${profileName}`);
+      setIsTransitioning(true);
+      setTimeout(() => {
+        setCurrentProfile(profileName);
+        lastProfileRef.current = profileName;
+        setConfigArray([]);
+        
+        socketRef.current?.send(`SAVE_LAST_SELECTED_PROFILE:${profileName}`);
+        socketRef.current?.send(`SWITCH_PROFILE:${profileName}`);
+        
+        // End the transition after the content has updated
+        setTimeout(() => {
+          setIsTransitioning(false);
+        }, 50);
+      }, 300);
     } else {
       appendToDebugLog('WebSocket is not initialized or ready.');
     }
-  };
-  
+  }, [appendToDebugLog, setCurrentProfile, setConfigArray]);
+
+
   
   const saveConfig = (newConfigArray: KeyBinding[]) => {
     // Ensure the current profile is selected before proceeding
@@ -786,6 +796,8 @@ if (!isWebSocketReady || !isProfilesLoaded) {
     );
   }
 
+
+ 
   return (
     <div className="main-container">
       {!isWebSocketReady || !isProfilesLoaded ? (
@@ -817,7 +829,7 @@ if (!isWebSocketReady || !isProfilesLoaded) {
                       id="profile-select"
                       value={currentProfile}
                       onChange={(e) => switchProfile(e.target.value)}
-                      className="profile-select" // Updated class name
+                      className="profile-select"
                     >
                       {profiles.map((profile) => (
                         <option key={profile} value={profile}>
@@ -866,7 +878,7 @@ if (!isWebSocketReady || !isProfilesLoaded) {
                 accept="audio/*"
               />
 
-              <div>
+              <div className={`binding-list-fade ${isTransitioning ? 'fade-out' : ''}`}>
                 {configArray.map((keyBinding) => (
                   <div key={keyBinding.id} className="binding-card">
                     <button
@@ -926,7 +938,7 @@ if (!isWebSocketReady || !isProfilesLoaded) {
                     </div>
 
                     <div className="input-wrapper">
-                      <span className="wave-square-icon">🌀</span>
+                      <span className="wave-square-icon"><FaWaveSquare /></span>
                       <input
                         type="number"
                         value={keyBinding.binding.pitch}

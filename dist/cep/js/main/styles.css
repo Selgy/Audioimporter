@@ -1,236 +1,294 @@
 /* Global Styles */
 body {
-    background-color: #1c1f3a;  /* Dark background color for modern appearance */
-    color: #ffffff;  /* White text for contrast */
-    font-family: 'Roboto', sans-serif;  /* Modern sans-serif font for readability */
+    background-color: #1c1f3a;
+    color: #ffffff;
+    font-family: 'Roboto', sans-serif;
     margin: 0;
     padding: 0;
     box-sizing: border-box;
-    font-size: 14px; /* Smaller global font size */
-  }
-  
-  /* Main Container */
-  .main-container {
-    padding: 10px;  /* Reduced padding for a more compact look */
-  }
-  
-  /* Profile Section */
-  .profile-section {
-    background-color: #2e2f77;  /* Slightly lighter dark background */
-    padding: 10px;  /* Reduced padding */
-    border-radius: 6px;  /* Slightly smaller radius */
-    margin-bottom: 15px;  /* Reduced bottom margin */
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);  /* Less shadow for a subtler effect */
-  }
-  
-  /* Profile Management */
-  .profile-select-wrapper {
+    font-size: 14px; /* Font size for better readability */
+}
+
+/* Main Container */
+.main-container {
+    padding: 10px;
+    width: 680px;  /* Reduced width to better fit the viewport */
+    margin: 0 auto;  /* Center the container horizontally */
+}
+
+/* Profile Section */
+.profile-section {
+    background-color: #2e2f77;
+    padding: 10px;
+    border-radius: 6px;
+    margin-bottom: 15px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
     display: flex;
-    justify-content: space-between;
     align-items: center;
-  }
-  
-  /* Buttons */
-  .button {
-    padding: 6px 10px;  /* Reduced padding */
-    background-color: #4e52ff;  /* Primary blue color */
-    color: #ffffff;  /* White text for readability */
+}
+
+/* Profile Management */
+.profile-select-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+/* Profile buttons container */
+.profile-buttons {
+    display: flex;
+    gap: 15px;
+    margin-left: 20px;
+}
+
+
+.profile-select {
+    width: 120px; /* Increased width to accommodate longer profile names */
+    padding: 6px;
+    background-color: #3e41a8;
+    color: #ffffff;
     border: none;
-    border-radius: 4px;  /* Smaller rounded corners */
+    border-radius: 4px;
+    font-size: 14px; /* Slightly larger font size for better readability */
+}
+
+.profile-select:focus {
+    outline: 2px solid #4e52ff;
+}
+
+.button {
+    padding: 6px 10px;
+    background-color: #4e52ff;
+    color: #ffffff;
+    border: none;
+    border-radius: 4px;
     cursor: pointer;
     font-weight: bold;
     text-transform: uppercase;
     transition: background-color 0.3s ease, transform 0.3s ease;
-    margin-right: 5px;  /* Reduced margin */
-    font-size: 12px;  /* Smaller font size */
-  }
-  
-  .button:hover {
-    background-color: #3a40cc;  /* Slightly lighter blue for hover */
-    transform: scale(1.03);  /* Slight zoom-in for hover effect */
-  }
-  
-  .button:disabled {
-    background-color: #2e3177;  /* Darker color for disabled state */
+    font-size: 12px;
+}
+
+/* Specific style for the Delete Profile button */
+.button.delete-profile {
+    background-color: #ff5b3b;
+}
+
+.button.delete-profile:hover {
+    background-color: #e64d2e;
+}
+
+.button:hover {
+    background-color: #3a40cc;
+    transform: scale(1.03);
+}
+
+.button:disabled {
+    background-color: #2e3177;
     cursor: not-allowed;
-  }
-  
-  /* Key Binding Input */
-  .key-binding-input {
-    width: 200px;  /* Reduced width */
-    padding: 6px;  /* Reduced padding */
-    background-color: #3e41a8;  /* Deep blue background */
-    color: #ffffff;  /* White text */
+}
+
+/* Updated styles for fade transition */
+.fade-transition {
+    transition: opacity 0.1s ease-in-out;
+    opacity: 1;
+}
+
+.fade-transition.fade-out {
+    opacity: 0;
+}
+
+.binding-list-fade {
+    transition: opacity 0.1s ease-in-out;
+    opacity: 1;
+}
+
+.binding-list-fade.fade-out {
+    opacity: 0;
+}
+
+
+/* Key Binding Input */
+.key-binding-input {
+    width: 100px;  /* Adjusted width for better balance */
+    padding: 6px;
+    background-color: #3e41a8;
+    color: #ffffff;
     border: none;
-    border-radius: 4px;  /* Slightly smaller radius */
-    margin-right: 5px;  /* Reduced margin */
+    border-radius: 4px;
     text-align: center;
-    font-size: 12px;  /* Smaller font size */
-  }
-  
-  .key-binding-input:focus {
-    outline: 2px solid #4e52ff;  /* Smaller outline for accessibility */
-  }
-  
-  /* Binding Card */
-  .binding-card {
+    font-size: 13px;
+}
+
+.key-binding-input:focus {
+    outline: 2px solid #4e52ff;
+}
+
+/* Binding Card */
+.binding-card {
     display: flex;
     align-items: center;
-    margin-bottom: 10px;  /* Reduced bottom margin */
-    background-color: #2e2f77;  /* Slightly lighter dark background */
-    padding: 10px;  /* Reduced padding */
-    border-radius: 6px;  /* Slightly smaller radius */
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);  /* Subtle shadow */
-    transition: transform 0.2s;
-  }
-  
-  .binding-card:hover {
-    transform: translateY(-2px);  /* Less hover elevation */
-  }
-  
-  /* Delete Button */
-  .delete-button {
+    margin-bottom: 10px;
+    background-color: #2e2f77;
+    padding: 8px;
+    border-radius: 6px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+    gap: 8px;
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.binding-card:hover {
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    transform: translateY(-1px);
+}
+
+/* Delete Button */
+.delete-button {
     background-color: transparent;
-    color: #ff5b3b;  /* Red color for delete action */
-    width: 25px;  /* Reduced size */
-    height: 25px;  /* Reduced size */
-    padding: 4px;  /* Smaller padding */
-    border-radius: 50%;  /* Circle for delete button */
+    color: #ff5b3b;
+    width: 25px;  /* Slightly smaller button for a balanced look */
+    height: 25px;
+    padding: 2px;
+    border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    margin-right: 10px;  /* Reduced margin */
     border: none;
     cursor: pointer;
-  }
-  
-  .delete-button:hover {
-    background-color: #ff5b3b;  /* Red background on hover */
-    color: #ffffff;  /* White icon when hovered */
-  }
-  
-  /* Track Select Dropdown */
-  .track-select {
-    width: 60px;  /* Reduced width */
-    padding: 5px;  /* Reduced padding */
-    background-color: #3e41a8;  /* Deep blue background */
-    color: #ffffff;  /* White text */
+}
+
+.delete-button:hover {
+    background-color: #ff5b3b;
+    color: #ffffff;
+}
+
+/* Track Select Dropdown */
+.track-select {
+    width: 65px;  /* Reduced width for a more balanced layout */
+    padding: 4px;
+    background-color: #3e41a8;
+    color: #ffffff;
     border: none;
-    border-radius: 4px;  /* Slightly smaller radius */
-    margin-right: 10px;  /* Reduced margin */
-    font-size: 12px;  /* Smaller font size */
-  }
-  
-  .track-select:focus {
-    outline: 2px solid #4e52ff;  /* Smaller focus outline */
-  }
-  
-  /* File Input (Hidden) */
-  .file-input {
+    border-radius: 4px;
+    font-size: 13px;
+}
+
+.track-select:focus {
+    outline: 2px solid #4e52ff;
+}
+
+/* File Input (Hidden) */
+.file-input {
     display: none;
-  }
-  
-  /* Icons */
-  .volume-icon {
-    color: #ffffff;  /* White color for volume icon */
-    margin-right: 8px;  /* Reduced margin */
-    font-size: 14px;  /* Smaller icon size */
-  }
-  
-  .wave-square-icon {
+}
+
+/* Icons */
+.volume-icon {
+    color: #ffffff;
+    margin-right: 4px;
+    font-size: 14px;  /* Slightly smaller icon size */
+}
+
+.wave-square-icon {
     margin-right: 0px;
-    margin-left: -10px;  /* Reduced left margin */
-    width: 30px;  /* Reduced width */
+    margin-left: -8px;  
+    width: 24px;
     padding: 0px;
-  }
-  
-  /* Input Wrapper */
-  .input-wrapper {
+}
+
+/* Input Wrapper */
+.input-wrapper {
     display: flex;
     align-items: center;
-    margin-right: 10px;  /* Reduced margin */
+    margin-right: 8px;  /* Adjusted margin to fit properly */
     position: relative;
-  }
-  
-  /* Number Input Fields (e.g., Volume, Pitch) */
-  .number-input {
-    width: 40px;  /* Reduced width */
-    padding: 5px;  /* Reduced padding */
-    background-color: #3e41a8;  /* Deep blue background */
-    color: #ffffff;  /* White text */
+    gap: 4px; /* Consistent space between icon and input */
+}
+
+/* Number Input Fields (e.g., Volume, Pitch) */
+.number-input {
+    width: 45px;  /* Adjusted width to fit better */
+    padding: 5px;
+    background-color: #3e41a8;
+    color: #ffffff;
     border: none;
-    border-radius: 4px;  /* Slightly smaller radius */
+    border-radius: 4px;
     text-align: center;
-    font-size: 12px;  /* Smaller font size */
-  }
-  
-  .number-input:focus {
-    outline: 2px solid #4e52ff;  /* Smaller focus outline */
-  }
-  
-  /* Label for Number Input */
-  .input-label {
+    font-size: 13px;
+}
+
+.number-input:focus {
+    outline: 2px solid #4e52ff;
+}
+
+/* Label for Number Input */
+.input-label {
     position: absolute;
-    right: 4px;  /* Reduced right offset */
+    right: 5px;
     top: 50%;
     transform: translateY(-50%);
     color: #ffffff;
-    font-size: 10px;  /* Smaller font size */
+    font-size: 11px;  /* Slightly smaller for alignment */
     pointer-events: none;
-  }
-  
-  /* Add Binding Section */
-  .add-binding-container {
-    margin-bottom: 10px;  /* Reduced bottom margin */
+}
+
+/* Add Binding Section */
+.add-binding-container {
+    margin-bottom: 15px;  /* Increased space between sections */
     padding: 10px;
     background-color: #2e2f77;
-    border-radius: 6px;  /* Reduced border radius */
+    border-radius: 6px;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
     display: flex;
     justify-content: space-between;
     align-items: center;
-  }
-  
-  /* Spinner for Loading */
-  .spinner {
-    font-size: 20px;  /* Smaller spinner size */
+}
+
+/* Separator between Add Binding and Key Bindings */
+.separator {
+    border-bottom: 2px solid #4e52ff;  /* Adds a visual separation line */
+    margin-bottom: 10px;
+}
+
+/* Spinner for Loading */
+.spinner {
+    font-size: 20px;  
     animation: spin 1s linear infinite;
-  }
-  
-  @keyframes spin {
+}
+
+@keyframes spin {
     0% {
-      transform: rotate(0deg);
+        transform: rotate(0deg);
     }
     100% {
-      transform: rotate(360deg);
+        transform: rotate(360deg);
     }
-  }
-  
-  /* Tooltip Styles (optional for additional accessibility) */
-  .tooltip {
+}
+
+/* Tooltip Styles (optional for additional accessibility) */
+.tooltip {
     position: relative;
     display: inline-block;
-  }
-  
-  .tooltip .tooltip-text {
-    visibility: hidden;
-    width: 100px;  /* Reduced width */
+}
+
+.tooltip .tooltip-text {
+    display: none;
+    width: 120px;  /* Adjusted width for readability */
     background-color: #4e52ff;
     color: #ffffff;
     text-align: center;
-    border-radius: 4px;  /* Slightly smaller radius */
-    padding: 4px;  /* Reduced padding */
+    border-radius: 4px;
+    padding: 6px;
     position: absolute;
-    z-index: 1;
+    z-index: 10;
     bottom: 125%;
     left: 50%;
-    margin-left: -50px;  /* Reduced horizontal offset */
+    transform: translateX(-50%);
+    transition: all 0.3s ease;
     opacity: 0;
-    transition: opacity 0.3s;
-  }
-  
-  .tooltip:hover .tooltip-text {
-    visibility: visible;
+}
+
+.tooltip:hover .tooltip-text {
+    display: block;
     opacity: 1;
-  }
-  
+}
