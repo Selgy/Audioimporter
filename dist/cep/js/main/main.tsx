@@ -53,6 +53,7 @@ const Main: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isCreateProfileModalOpen, setIsCreateProfileModalOpen] = useState(false);
   // Instead of using Node's `os` module, use `navigator` to determine the platform
   const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
   const isWindows = navigator.platform.toUpperCase().indexOf('WIN') >= 0;
@@ -703,7 +704,7 @@ function startWebSocketConnection() {
       })}`);
       appendToDebugLog(`New profile configuration saved for ${profileName}`);
     }
-    setIsCreateModalOpen(false);
+    setIsCreateProfileModalOpen(false);
   };
 
   const deleteProfile = () => {
@@ -730,63 +731,52 @@ function startWebSocketConnection() {
     setIsDeleteModalOpen(false);
   };
 
-
-// Ensure that WebSocket is ready and profiles are loaded before rendering
-if (!isWebSocketReady || !isProfilesLoaded) {
-  return (
-    <div
-      style={{
-        fontFamily: 'Roboto, sans-serif',
-        backgroundColor: '#1e2057',
-        color: '#ffffff',
-        padding: '10px',
-        textAlign: 'center',
-      }}
-    >
-      <div>Loading profiles, please wait...</div>
+  const LoadingScreen = () => (
+    <div className="loading-screen">
+      <div className="loading-content">
+        <div className="spinner"></div>
+        <p className="loading-message">Loading profiles, please wait...</p>
+      </div>
     </div>
   );
-}
+// Ensure that WebSocket is ready and profiles are loaded before rendering
+  // Ensure that WebSocket is ready and profiles are loaded before rendering
+  if (!isWebSocketReady || !isProfilesLoaded) {
+    return <LoadingScreen />;
+  }
 
 
 
-  // If no current profile is selected, prompt the user to create one
-  if (!currentProfile) {
+  // If no profiles are available, show the Create Profile button and modal
+  if (profiles.length === 0) {
     return (
-      <div
-        style={{
-          fontFamily: 'Roboto, sans-serif',
-          backgroundColor: '#1e2057',
-          color: '#ffffff',
-          padding: '10px',
-        }}
-      >
-        <div
-          style={{
-            marginBottom: '15px',
-            padding: '10px',
-            backgroundColor: '#2e2f77',
-            borderRadius: '5px',
-          }}
-        >
-          <p>No profiles available. Please create a new profile.</p>
-          <button
-            onClick={createProfile}
-            style={{
-              padding: '10px',
-              backgroundColor: '#4e52ff',
-              color: '#ffffff',
-              borderRadius: '2px',
-              border: 'none',
-              cursor: 'pointer',
-            }}
-          >
-            Create Profile
-          </button>
+      <div className="main-container">
+        <div className="profile-section">
+          <div>
+            <p>No profiles available. Please create a new profile.</p>
+            <button
+              className="button"
+              onClick={() => setIsCreateProfileModalOpen(true)}
+            >
+              Create Profile
+            </button>
+          </div>
         </div>
+
+        <Modal
+          isOpen={isCreateProfileModalOpen}
+          onClose={() => setIsCreateProfileModalOpen(false)}
+          onSubmit={handleCreateProfile}
+          title="Create New Profile"
+          submitText="Create"
+          cancelText="Cancel"
+          inputPlaceholder="Enter profile name"
+          showInput={true}
+        />
       </div>
     );
   }
+
 
   return (
     <div className="main-container">
@@ -794,7 +784,6 @@ if (!isWebSocketReady || !isProfilesLoaded) {
         <div className="spinner-container">
           <div className="spinner-message">Loading profiles, please wait...</div>
           <div className="spinner">🔄</div>
-          <p>Current Platform: {isMac ? 'Mac' : isWindows ? 'Windows' : 'Other'}</p>
         </div>
       ) : (
         <>
@@ -967,6 +956,16 @@ if (!isWebSocketReady || !isProfilesLoaded) {
         submitText="Delete"
         cancelText="Cancel"
         showInput={false}
+      />
+            <Modal
+        isOpen={isCreateProfileModalOpen}
+        onClose={() => setIsCreateProfileModalOpen(false)}
+        onSubmit={handleCreateProfile}
+        title="Create New Profile"
+        submitText="Create"
+        cancelText="Cancel"
+        inputPlaceholder="Enter profile name"
+        showInput={true}
       />
     </div>
   );
