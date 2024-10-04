@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { FaVolumeUp, FaWaveSquare } from 'react-icons/fa';
 import { v4 as uuidv4 } from 'uuid';
-
-
 import './styles.css';
+import Modal from './Modal'; // Make sure to import the Modal component
+
 // Define your types
 interface AudioBinding {
   path: string;
@@ -50,7 +50,9 @@ const Main: React.FC = () => {
   const path = window.electron ? require('path') : null;
   const os = require('os');
   const [isTransitioning, setIsTransitioning] = useState(false);
-
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   // Instead of using Node's `os` module, use `navigator` to determine the platform
   const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
   const isWindows = navigator.platform.toUpperCase().indexOf('WIN') >= 0;
@@ -185,41 +187,41 @@ const Main: React.FC = () => {
   const saveConfig = (newConfigArray: KeyBinding[]) => {
     // Ensure the current profile is selected before proceeding
     const activeProfile = currentProfile || lastProfileRef.current;
-
+  
     if (!activeProfile) {
-        appendToDebugLog('Cannot save config: No current profile selected.');
-        return;
+      appendToDebugLog('Cannot save config: No current profile selected.');
+      return;
     }
-
+  
     if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) {
-        appendToDebugLog('WebSocket is not initialized or not ready.');
-        return;
+      appendToDebugLog('WebSocket is not initialized or not ready.');
+      return;
     }
-
+  
     const configObject = newConfigArray.reduce((obj, keyBinding) => {
-        obj[keyBinding.key] = keyBinding.binding;
-        return obj;
+      obj[keyBinding.key] = keyBinding.binding;
+      return obj;
     }, {} as { [key: string]: AudioBinding });
-
+  
     try {
-        appendToDebugLog(`Sending config to server for profile ${activeProfile}: ${JSON.stringify(configObject)}`);
-        
-        const message = JSON.stringify({
-            profile: activeProfile,  // Ensure the correct profile is included
-            config: configObject,
-        });
-
-        socketRef.current.send(`SAVE_CONFIG:${message}`);
-        appendToDebugLog('Config sent successfully');
-        setConfigArray(newConfigArray);  // Update the local state
+      appendToDebugLog(`Sending config to server for profile ${activeProfile}: ${JSON.stringify(configObject)}`);
+      
+      const message = JSON.stringify({
+        profile: activeProfile,  // Ensure the correct profile is included
+        config: configObject,
+      });
+  
+      socketRef.current.send(`SAVE_CONFIG:${message}`);
+      appendToDebugLog('Config sent successfully');
+      setConfigArray(newConfigArray);  // Update the local state
     } catch (error: unknown) {
-        if (error instanceof Error) {
-            appendToDebugLog(`Error saving config: ${error.message}`);
-        } else {
-            appendToDebugLog('Unexpected error saving config.');
-        }
+      if (error instanceof Error) {
+        appendToDebugLog(`Error saving config: ${error.message}`);
+      } else {
+        appendToDebugLog('Unexpected error saving config.');
+      }
     }
-};
+  };
 
   
 
@@ -359,7 +361,6 @@ const Main: React.FC = () => {
     },
     [appendToDebugLog, saveConfig, stopListening, currentProfile]
   );
-  
   
 
 useEffect(() => {
@@ -684,22 +685,17 @@ function startWebSocketConnection() {
 
 
   const createProfile = () => {
-    const profileName = prompt('Enter new profile name:');
+    setIsCreateModalOpen(true);
+  };
+
+  
+  const handleCreateProfile = (profileName: string) => {
     if (profileName) {
-      // Send WebSocket request to create the profile on the server
       socketRef.current?.send(`CREATE_PROFILE:${profileName}`);
-      
-      // Optimistically update the profiles state to show it in the list immediately
       setProfiles((prevProfiles) => [...prevProfiles, profileName]);
-  
-      // Set the new profile as the current profile
       setCurrentProfile(profileName);
-  
-      // Clear the bindings for the newly created profile
       setConfigArray([]);
       appendToDebugLog(`New profile created and switched to: ${profileName}`);
-  
-      // Save an empty or default configuration for the newly created profile
       const defaultConfig = {};
       socketRef.current?.send(`SAVE_CONFIG:${JSON.stringify({
         profile: profileName,
@@ -707,36 +703,32 @@ function startWebSocketConnection() {
       })}`);
       appendToDebugLog(`New profile configuration saved for ${profileName}`);
     }
+    setIsCreateModalOpen(false);
   };
-  
-  
 
   const deleteProfile = () => {
-    if (currentProfile && confirm(`Are you sure you want to delete profile '${currentProfile}'?`)) {
-      // Send a message to the server to delete the profile and its configuration
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleDeleteProfile = () => {
+    if (currentProfile) {
       socketRef.current?.send(`DELETE_PROFILE:${currentProfile}`);
-  
-      // Optimistically remove the profile from the state
       setProfiles((prevProfiles) => prevProfiles.filter((p) => p !== currentProfile));
       
       const newProfile = profiles.find((p) => p !== currentProfile) || null;
-  
-      // Switch to a new profile if one exists, otherwise clear the UI
       if (newProfile) {
         setCurrentProfile(newProfile);
-        setConfigArray([]); // Clear the current bindings UI
+        setConfigArray([]);
         socketRef.current?.send(`SWITCH_PROFILE:${newProfile}`);
-        loadConfig(newProfile); // Pass the newProfile as an argument
+        loadConfig(newProfile);
       } else {
-        // If no profiles are left, clear everything
         setCurrentProfile(null);
-        setConfigArray([]); // Clear config array if no profiles are left
+        setConfigArray([]);
       }
-  
       appendToDebugLog(`Profile '${currentProfile}' deleted successfully`);
     }
+    setIsDeleteModalOpen(false);
   };
-  
 
 
 // Ensure that WebSocket is ready and profiles are loaded before rendering
@@ -796,8 +788,6 @@ if (!isWebSocketReady || !isProfilesLoaded) {
     );
   }
 
-
- 
   return (
     <div className="main-container">
       {!isWebSocketReady || !isProfilesLoaded ? (
@@ -812,7 +802,7 @@ if (!isWebSocketReady || !isProfilesLoaded) {
             <div className="profile-section">
               <div>
                 <p>No profiles available. Please create a new profile.</p>
-                <button className="button" onClick={createProfile}>
+                <button className="button" onClick={() => setIsCreateModalOpen(true)}>
                   Create Profile
                 </button>
               </div>
@@ -839,10 +829,10 @@ if (!isWebSocketReady || !isProfilesLoaded) {
                     </select>
                   </div>
                   <div className="profile-buttons">
-                    <button className="button" onClick={createProfile}>
+                    <button className="button" onClick={() => setIsCreateModalOpen(true)}>
                       New Profile
                     </button>
-                    <button className="button delete-profile" onClick={deleteProfile}>
+                    <button className="button delete-profile" onClick={() => setIsDeleteModalOpen(true)}>
                       Delete Profile
                     </button>
                   </div>
@@ -957,9 +947,31 @@ if (!isWebSocketReady || !isProfilesLoaded) {
           )}
         </>
       )}
+
+      <Modal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        onSubmit={handleCreateProfile}
+        title="Create New Profile"
+        submitText="Create"
+        cancelText="Cancel"
+        inputPlaceholder="Enter profile name"
+        showInput={true}
+      />
+
+      <Modal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        onSubmit={handleDeleteProfile}
+        title={`Delete Profile "${currentProfile}"`}
+        submitText="Delete"
+        cancelText="Cancel"
+        showInput={false}
+      />
     </div>
   );
 };
+
 
 
 export default Main;
