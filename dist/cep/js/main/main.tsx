@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import './styles.css';
 import Modal from './Modal'; // Make sure to import the Modal component
 
+
 // Define your types
 interface AudioBinding {
   path: string;
@@ -186,7 +187,6 @@ const Main: React.FC = () => {
 
   
   const saveConfig = (newConfigArray: KeyBinding[]) => {
-    // Ensure the current profile is selected before proceeding
     const activeProfile = currentProfile || lastProfileRef.current;
   
     if (!activeProfile) {
@@ -205,16 +205,14 @@ const Main: React.FC = () => {
     }, {} as { [key: string]: AudioBinding });
   
     try {
-      appendToDebugLog(`Sending config to server for profile ${activeProfile}: ${JSON.stringify(configObject)}`);
-      
       const message = JSON.stringify({
-        profile: activeProfile,  // Ensure the correct profile is included
+        profile: activeProfile,
         config: configObject,
       });
-  
+      appendToDebugLog(`Sending updated config to server: ${message}`);
       socketRef.current.send(`SAVE_CONFIG:${message}`);
       appendToDebugLog('Config sent successfully');
-      setConfigArray(newConfigArray);  // Update the local state
+      setConfigArray(newConfigArray);
     } catch (error: unknown) {
       if (error instanceof Error) {
         appendToDebugLog(`Error saving config: ${error.message}`);
@@ -223,7 +221,7 @@ const Main: React.FC = () => {
       }
     }
   };
-
+  
   
 
 
@@ -579,29 +577,27 @@ function startWebSocketConnection() {
 
   const selectAudioFile = (id: string) => {
     appendToDebugLog(`Attempting to select audio file for id: ${id}`);
-    if (fileInputRef.current) {
-      appendToDebugLog('File input reference is available.');
-      fileInputRef.current.click();
-      fileInputRef.current.onchange = (event) => {
-        appendToDebugLog('File input change event triggered.');
-        const file = (event.target as HTMLInputElement).files?.[0];
-        if (file) {
-          appendToDebugLog(`File selected: ${file.name}`);
-          const filePath = path ? path.resolve((file as any).path || file.name) : file.name; // Cross-platform path handling
-          appendToDebugLog(`File path resolved to: ${filePath}`);
+    if (window.electron && window.electron.ipcRenderer) {
+      window.electron.ipcRenderer.send('open-file-dialog', id);
+  
+      const handleSelectedFile = (event: any, selectedId: string, filePath: string) => {
+        if (selectedId === id) {
+          appendToDebugLog(`File selected: ${filePath}`);
           const keyBinding = configArray.find((kb) => kb.id === id);
           if (keyBinding) {
             updateBinding(id, { ...keyBinding.binding, path: filePath });
             appendToDebugLog(`Selected audio file for id ${id}: ${filePath}`);
           }
-        } else {
-          appendToDebugLog('No file selected.');
+          window.electron.ipcRenderer.removeListener('selected-file', handleSelectedFile);
         }
       };
+  
+      window.electron.ipcRenderer.on('selected-file', handleSelectedFile);
     } else {
-      appendToDebugLog('File input reference is not available.');
+      appendToDebugLog('IPC Renderer not available.');
     }
   };
+  
   
 
   // Function to delete a binding
@@ -686,7 +682,7 @@ function startWebSocketConnection() {
 
 
   const createProfile = () => {
-    setIsCreateModalOpen(true);
+    setIsCreateProfileModalOpen(true);
   };
 
   
@@ -699,10 +695,12 @@ function startWebSocketConnection() {
         setConfigArray([]);
         appendToDebugLog(`New profile created and switched to: ${profileName}`);
         const defaultConfig = {};
-        socketRef.current?.send(`SAVE_CONFIG:${JSON.stringify({
-          profile: profileName,
-          config: defaultConfig,
-        })}`);
+        socketRef.current?.send(
+          `SAVE_CONFIG:${JSON.stringify({
+            profile: profileName,
+            config: defaultConfig,
+          })}`
+        );
         appendToDebugLog(`New profile configuration saved for ${profileName}`);
       } catch (error) {
         console.error("Error creating profile:", error);
@@ -711,11 +709,10 @@ function startWebSocketConnection() {
     } else {
       appendToDebugLog("Attempted to create profile with empty name");
     }
-  
-    // Always close the modal, even if there was an error
+
+    // Close the modal regardless of success or error
     setIsCreateProfileModalOpen(false);
   };
-  
 
 
   const deleteProfile = () => {
@@ -758,7 +755,6 @@ function startWebSocketConnection() {
 
 
 
-  // If no profiles are available, show the Create Profile button and modal
   if (profiles.length === 0) {
     return (
       <div className="main-container">
@@ -767,16 +763,27 @@ function startWebSocketConnection() {
             <p>No profiles available. Please create a new profile.</p>
             <button
               className="button"
-              onClick={() => setIsCreateProfileModalOpen(true)}
+              onClick={() => setIsCreateProfileModalOpen(true)} // Set modal open state here
             >
               Create Profile
             </button>
           </div>
         </div>
+
+        {/* Render the Modal component */}
+        <Modal
+        isOpen={isCreateProfileModalOpen}
+        onClose={() => setIsCreateProfileModalOpen(false)}
+        onSubmit={handleCreateProfile}
+        title="Create New Profile"
+        submitText="Create"
+        cancelText="Cancel"
+        inputPlaceholder="Enter profile name"
+        showInput={true}
+      />
       </div>
     );
   }
-
 
   return (
     <div className="main-container">
