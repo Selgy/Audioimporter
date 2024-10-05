@@ -3,7 +3,7 @@ import { FaVolumeUp, FaWaveSquare } from 'react-icons/fa';
 import { v4 as uuidv4 } from 'uuid';
 import './styles.css';
 import Modal from './Modal'; // Make sure to import the Modal component
-
+const path = window.electron ? require('path') : null;
 
 // Define your types
 interface AudioBinding {
@@ -577,24 +577,40 @@ function startWebSocketConnection() {
 
   const selectAudioFile = (id: string) => {
     appendToDebugLog(`Attempting to select audio file for id: ${id}`);
-    if (window.electron && window.electron.ipcRenderer) {
-      window.electron.ipcRenderer.send('open-file-dialog', id);
+    
+    if (fileInputRef.current) {
+      appendToDebugLog('File input reference is available.');
+      
+      // Simulate a click on the file input to open the file picker dialog
+      fileInputRef.current.click();
   
-      const handleSelectedFile = (event: any, selectedId: string, filePath: string) => {
-        if (selectedId === id) {
-          appendToDebugLog(`File selected: ${filePath}`);
+      // Handle file selection
+      fileInputRef.current.onchange = (event) => {
+        appendToDebugLog('File input change event triggered.');
+        
+        const file = (event.target as HTMLInputElement).files?.[0];
+        
+        if (file) {
+          appendToDebugLog(`File selected: ${file.name}`);
+  
+          // Get the full path to the file using Electron's file.path
+          const filePath = (file as any).path;  // Full path of the file in Electron
+  
+          appendToDebugLog(`File path resolved to: ${filePath}`);
+  
+          // Update the key binding with the full path
           const keyBinding = configArray.find((kb) => kb.id === id);
           if (keyBinding) {
+            // Update the key binding with the full file path
             updateBinding(id, { ...keyBinding.binding, path: filePath });
             appendToDebugLog(`Selected audio file for id ${id}: ${filePath}`);
           }
-          window.electron.ipcRenderer.removeListener('selected-file', handleSelectedFile);
+        } else {
+          appendToDebugLog('No file selected.');
         }
       };
-  
-      window.electron.ipcRenderer.on('selected-file', handleSelectedFile);
     } else {
-      appendToDebugLog('IPC Renderer not available.');
+      appendToDebugLog('File input reference is not available.');
     }
   };
   
@@ -622,17 +638,37 @@ function startWebSocketConnection() {
   useEffect(() => {
     if (currentProfile && isWebSocketReady) {
       appendToDebugLog(`Loading config for profile: ${currentProfile}`);
+  
+      const loadConfig = (profileName?: string) => {
+        const profile = profileName || currentProfile;
+        if (!profile) {
+          appendToDebugLog('No profile specified or selected. Cannot load config.');
+          return;
+        }
+        appendToDebugLog(`Attempting to load config for profile: ${profile}`);
+        
+        if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+          appendToDebugLog(`WebSocket is open. Sending LOAD_CONFIG request for profile: ${profile}`);
+          setLoading(true); // Set loading to true before starting config load
+          socketRef.current.send(`LOAD_CONFIG:${profile}`);
+        } else {
+          appendToDebugLog('Cannot load config: WebSocket is not open.');
+        }
+      };
+  
       loadConfig(currentProfile);
     }
-  }, [currentProfile, isWebSocketReady, loadConfig]);
+  }, [currentProfile, isWebSocketReady]);
   
 
 
 
   const extractFileName = (filePath: string): string => {
-    if (!path) return filePath;  // Return raw path if `path` is not available (i.e., in a web environment)
-    return path.basename(filePath); // Use `path.basename` for cross-platform compatibility
+    if (!filePath) return '';
+    const parts = filePath.split(/[/\\]/); // Split by forward or backslashes
+    return parts[parts.length - 1]; // Return the last part
   };
+  
   
 
   // Function to handle number input changes
@@ -902,7 +938,7 @@ function startWebSocketConnection() {
                     <input
                       type="text"
                       readOnly
-                      value={extractFileName(keyBinding.binding.path)}
+                      value={extractFileName(keyBinding.binding.path)}  // Display the file name only
                       className="key-binding-input"
                     />
                     <button
