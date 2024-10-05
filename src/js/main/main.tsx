@@ -691,21 +691,32 @@ function startWebSocketConnection() {
 
   
   const handleCreateProfile = (profileName: string) => {
-    if (profileName) {
-      socketRef.current?.send(`CREATE_PROFILE:${profileName}`);
-      setProfiles((prevProfiles) => [...prevProfiles, profileName]);
-      setCurrentProfile(profileName);
-      setConfigArray([]);
-      appendToDebugLog(`New profile created and switched to: ${profileName}`);
-      const defaultConfig = {};
-      socketRef.current?.send(`SAVE_CONFIG:${JSON.stringify({
-        profile: profileName,
-        config: defaultConfig,
-      })}`);
-      appendToDebugLog(`New profile configuration saved for ${profileName}`);
+    if (profileName.trim()) {
+      try {
+        socketRef.current?.send(`CREATE_PROFILE:${profileName}`);
+        setProfiles((prevProfiles) => [...prevProfiles, profileName]);
+        setCurrentProfile(profileName);
+        setConfigArray([]);
+        appendToDebugLog(`New profile created and switched to: ${profileName}`);
+        const defaultConfig = {};
+        socketRef.current?.send(`SAVE_CONFIG:${JSON.stringify({
+          profile: profileName,
+          config: defaultConfig,
+        })}`);
+        appendToDebugLog(`New profile configuration saved for ${profileName}`);
+      } catch (error) {
+        console.error("Error creating profile:", error);
+        appendToDebugLog(`Error creating profile: ${error}`);
+      }
+    } else {
+      appendToDebugLog("Attempted to create profile with empty name");
     }
+  
+    // Always close the modal, even if there was an error
     setIsCreateProfileModalOpen(false);
   };
+  
+
 
   const deleteProfile = () => {
     setIsDeleteModalOpen(true);
@@ -762,17 +773,6 @@ function startWebSocketConnection() {
             </button>
           </div>
         </div>
-
-        <Modal
-          isOpen={isCreateProfileModalOpen}
-          onClose={() => setIsCreateProfileModalOpen(false)}
-          onSubmit={handleCreateProfile}
-          title="Create New Profile"
-          submitText="Create"
-          cancelText="Cancel"
-          inputPlaceholder="Enter profile name"
-          showInput={true}
-        />
       </div>
     );
   }
@@ -957,7 +957,7 @@ function startWebSocketConnection() {
         cancelText="Cancel"
         showInput={false}
       />
-            <Modal
+      <Modal
         isOpen={isCreateProfileModalOpen}
         onClose={() => setIsCreateProfileModalOpen(false)}
         onSubmit={handleCreateProfile}

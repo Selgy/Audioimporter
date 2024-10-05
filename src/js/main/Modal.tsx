@@ -31,6 +31,7 @@ const Modal: React.FC<ModalProps> = ({
     if (!showInput || inputValue.trim()) {
       onSubmit(inputValue.trim());
       setInputValue('');
+      onClose(); // Close the modal after a successful submission
     }
   };
 
