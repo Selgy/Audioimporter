@@ -52,7 +52,8 @@ function importAudioToTrack(filePath, initialTrackIndex, volume, pitch, debugMod
 
         var metadata = audioItem.getProjectMetadata();
         addDebugMessage("Debug 7: Metadata retrieved");
-        
+
+        // Extract duration from metadata
         var durationMatch = metadata.match(/<premierePrivateProjectMetaData:Column\.Intrinsic\.MediaDuration>(.*?)<\/premierePrivateProjectMetaData:Column\.Intrinsic\.MediaDuration>/);
         var audioDuration = 0;
         if (durationMatch && durationMatch[1]) {
@@ -86,46 +87,74 @@ function importAudioToTrack(filePath, initialTrackIndex, volume, pitch, debugMod
         }
         addDebugMessage("Debug 10: Initial track index: " + initialTrackIndex + ", Total audio tracks: " + sequence.audioTracks.numTracks);
 
-        var placementResult = findPlacementLocation(sequence, initialTrackIndex - 1, time, {seconds: audioDuration});
-        debugLog += placementResult.debugLog;
-        addDebugMessage("Debug 11: Placement location found");
+        // Find a suitable track for the audio clip
+        var placementResult;
+        try {
+            placementResult = findPlacementLocation(sequence, initialTrackIndex - 1, time, { seconds: audioDuration });
+            debugLog += placementResult.debugLog;
+            addDebugMessage("Debug 11: Placement location search completed");
+            addDebugMessage("Debug 11b: placementResult: " + JSON.stringify(placementResult));
+        } catch (placementError) {
+            addDebugMessage("Error in findPlacementLocation: " + placementError.toString());
+            if (placementError.stack) {
+                addDebugMessage("Error stack: " + placementError.stack);
+            }
+            throw placementError;
+        }
+
+        if (!placementResult || typeof placementResult !== 'object') {
+            throw new Error("Invalid placementResult");
+        }
 
         if (!placementResult.track || !placementResult.time) {
-            throw new Error("No available space found on any unlocked track");
+            addDebugMessage("Debug 11a: No available space found on any unlocked track");
+            throw new Error("No available space found on any unlocked track. Last checked track: " + (placementResult.trackIndex !== null ? placementResult.trackIndex + 1 : "N/A"));
         }
+
+        addDebugMessage("Debug 12: Placement location found on track " + (placementResult.trackIndex + 1) + " at " + placementResult.time.seconds.toFixed(2) + " seconds");
 
         var audioTrack = placementResult.track;
         var insertTime = placementResult.time;
         var intendedTrackIndex = placementResult.trackIndex;
-        
-        addDebugMessage("Debug 12: Attempting to insert at " + insertTime.seconds.toFixed(2) + " seconds on intended track " + (intendedTrackIndex + 1));
 
+        addDebugMessage("Debug 12a: audioTrack: " + (audioTrack ? "defined" : "undefined"));
+        addDebugMessage("Debug 12b: insertTime: " + (insertTime ? insertTime.seconds : "undefined"));
+        addDebugMessage("Debug 12c: intendedTrackIndex: " + intendedTrackIndex);
+
+        // Insert the clip
         var newClip;
         try {
+            if (!audioTrack || !audioTrack.insertClip || typeof audioTrack.insertClip !== 'function') {
+                throw new Error("Invalid audioTrack or insertClip method not found");
+            }
             newClip = audioTrack.insertClip(audioItem, insertTime);
             if (!newClip) {
                 throw new Error("insertClip returned null or undefined");
             }
-            addDebugMessage("Debug 13: Clip inserted");
+            addDebugMessage("Debug 13: Clip inserted successfully");
 
-            var selectionResult = selectClipUsingQE(intendedTrackIndex, insertTime, addDebugMessage);
-
-            if (!selectionResult.success) {
-                throw new Error("Clip selection failed: " + selectionResult.message);
+            try {
+                var selectionResult = selectClipUsingQE(intendedTrackIndex, insertTime, addDebugMessage);
+                if (!selectionResult.success) {
+                    throw new Error("Clip selection failed: " + selectionResult.message);
+                }
+                addDebugMessage("Debug 14: Clip time range selected successfully");
+            } catch (selectionError) {
+                addDebugMessage("Error in selectClipUsingQE: " + selectionError.toString());
+                // Decide whether to throw the error or continue with the script
+                // For now, we'll continue and just log the error
             }
-            addDebugMessage("Debug 14: Clip time range selected successfully");
 
         } catch (insertError) {
             throw new Error("Failed to insert clip - " + insertError.toString());
         }
 
-        addDebugMessage("Debug 15: Received pitch value: " + pitch);
-
+        // Set volume and pitch if available
         try {
             $.sleep(100);  // Wait for the clip to be fully inserted
             setClipVolume(volume, addDebugMessage);
             addDebugMessage("Debug 16: Clip volume set to " + volume + " dB");
-            
+
             addDebugMessage("Debug 17: Attempting to apply pitch shift");
             if (pitch !== undefined && pitch !== null) {
                 applyPitchShifterToImportedAudio(pitch, addDebugMessage);
@@ -136,9 +165,6 @@ function importAudioToTrack(filePath, initialTrackIndex, volume, pitch, debugMod
 
         } catch (audioError) {
             addDebugMessage("Debug Error: Audio processing failed - " + audioError.toString());
-            if (audioError.stack) {
-                addDebugMessage("Error stack: " + audioError.stack);
-            }
             throw audioError;
         }
 
@@ -166,6 +192,9 @@ function importAudioToTrack(filePath, initialTrackIndex, volume, pitch, debugMod
     }
 }
 
+
+
+
 function findExistingAudioItem(project, filePath) {
     // Extract the file name from the path
     var fileName = filePath.split('\\').pop().split('/').pop();
@@ -190,12 +219,21 @@ function findExistingAudioItem(project, filePath) {
 
 
 function applyPitchShifterToImportedAudio(pitch, addDebugMessage) {
+    // Create a safe version of addDebugMessage
+    var safeAddDebugMessage = function(message) {
+        if (typeof addDebugMessage === 'function') {
+            addDebugMessage(message);
+        } else {
+            $.writeln(message); // Fallback to ExtendScript's writeln
+        }
+    };
+
     try {
-        addDebugMessage("Starting applyPitchShifterToImportedAudio function");
+        safeAddDebugMessage("Starting applyPitchShifterToImportedAudio function");
 
         // Skip applying pitch shifter if pitch is exactly 0
         if (pitch === 0) {
-            addDebugMessage("Skipping pitch shifter - pitch value is 0");
+            safeAddDebugMessage("Skipping pitch shifter - pitch value is 0");
             return; // Early exit since we don't need to apply the pitch shift
         }
 
@@ -214,7 +252,7 @@ function applyPitchShifterToImportedAudio(pitch, addDebugMessage) {
             throw new Error("Selected clip is undefined");
         }
 
-        addDebugMessage("Applying pitch shifter to clip: " + clip.name);
+        safeAddDebugMessage("Applying pitch shifter to clip: " + clip.name);
 
         // Get the QE sequence
         var qeSequence = qe.project.getActiveSequence();
@@ -222,31 +260,31 @@ function applyPitchShifterToImportedAudio(pitch, addDebugMessage) {
             throw new Error("QE sequence not found");
         }
 
-        addDebugMessage("QE sequence found");
+        safeAddDebugMessage("QE sequence found");
 
         // Find the QE clip
-        var qeClip = findQEClip(qeSequence, clip, addDebugMessage);
+        var qeClip = findQEClip(qeSequence, clip, safeAddDebugMessage);
         if (!qeClip) {
             throw new Error("QE clip not found");
         }
 
-        addDebugMessage("QE clip found: " + qeClip.name);
+        safeAddDebugMessage("QE clip found: " + qeClip.name);
 
         // Apply the Pitch Shifter effect if not already present
         if (!clipHasPitchShifter(qeClip)) {
-            addDebugMessage("Adding Pitch Shifter to QE clip");
+            safeAddDebugMessage("Adding Pitch Shifter to QE clip");
             var pitchShifterEffect = qe.project.getAudioEffectByName("Pitch Shifter");
             if (!pitchShifterEffect) {
                 throw new Error("Pitch Shifter effect not found");
             }
             qeClip.addAudioEffect(pitchShifterEffect);
-            addDebugMessage("Pitch Shifter effect added");
+            safeAddDebugMessage("Pitch Shifter effect added");
         } else {
-            addDebugMessage("Pitch Shifter already exists on clip");
+            safeAddDebugMessage("Pitch Shifter already exists on clip");
         }
 
         // Now access the clip via the standard DOM to set the effect properties
-        addDebugMessage("Accessing clip via standard DOM to set effect properties");
+        safeAddDebugMessage("Accessing clip via standard DOM to set effect properties");
 
         // Give some time for the effect to be applied
         $.sleep(100);
@@ -256,26 +294,26 @@ function applyPitchShifterToImportedAudio(pitch, addDebugMessage) {
 
         for (var i = 0; i < clip.components.numItems; i++) {
             var component = clip.components[i];
-            addDebugMessage("Component " + i + ": " + component.displayName + " (" + component.matchName + ")");
+            safeAddDebugMessage("Component " + i + ": " + component.displayName + " (" + component.matchName + ")");
 
             if (component.displayName === "Pitch Shifter" || component.matchName === "ADBE Pitch Shifter") {
                 pitchShifterFound = true;
 
                 // Log all properties of the effect
-                addDebugMessage("Logging properties of the Pitch Shifter effect:");
-                logComponentProperties(component, "", addDebugMessage);
+                safeAddDebugMessage("Logging properties of the Pitch Shifter effect:");
+                logComponentProperties(component, "", safeAddDebugMessage);
 
                 // Now attempt to set the "Transpose Ratio" property
                 var propertySet = false;
 
                 for (var j = 0; j < component.properties.numItems; j++) {
                     var property = component.properties[j];
-                    addDebugMessage("Property " + j + ": " + property.displayName + " (" + property.matchName + ")");
+                    safeAddDebugMessage("Property " + j + ": " + property.displayName + " (" + property.matchName + ")");
 
                     if (property.displayName === "Transpose Ratio" || property.matchName === "ADBE Pitch Shifter-0001") {
                         var transposeRatioValue = semitonesToTransposeRatio(pitch);
                         property.setValue(transposeRatioValue, true);
-                        addDebugMessage("Transpose Ratio set to: " + transposeRatioValue);
+                        safeAddDebugMessage("Transpose Ratio set to: " + transposeRatioValue);
                         propertySet = true;
                         break;
                     }
@@ -293,7 +331,7 @@ function applyPitchShifterToImportedAudio(pitch, addDebugMessage) {
             throw new Error("Pitch Shifter effect not found on clip.");
         }
 
-        addDebugMessage("Pitch value successfully set to: " + pitch);
+        safeAddDebugMessage("Pitch value successfully set to: " + pitch);
 
     } catch (e) {
         var errorMessage = "Error in applyPitchShifterToImportedAudio: " + e.toString();
@@ -301,7 +339,7 @@ function applyPitchShifterToImportedAudio(pitch, addDebugMessage) {
             errorMessage += "\nStack trace: " + e.stack;
         }
 
-        addDebugMessage(errorMessage);
+        safeAddDebugMessage(errorMessage);
         throw e;
     }
 }
@@ -553,64 +591,135 @@ function clipHasPitchShifter(clip) {
 
 
 
-
-
-
 function findPlacementLocation(sequence, startIndex, playheadTime, clipDuration) {
     var debugLog = "";
-    for (var i = startIndex; i < sequence.audioTracks.numTracks; i++) {
-        var track = sequence.audioTracks[i];
-        debugLog += "Checking track " + (i + 1) + "\n";
-        if (!track.isLocked()) {
-            debugLog += "Track " + (i + 1) + " is unlocked\n";
-            var space = findSpaceOnTrack(track, playheadTime, clipDuration);
-            if (space) {
-                debugLog += "Space found on track " + (i + 1) + " at " + space.seconds + " seconds\n";
-                return { track: track, time: space, trackIndex: i, debugLog: debugLog };
-            } else {
-                debugLog += "No space found on track " + (i + 1) + "\n";
-            }
-        } else {
-            debugLog += "Track " + (i + 1) + " is locked\n";
-        }
+
+    function addDebugMessage(message) {
+        debugLog += message + "\n";
     }
-    debugLog += "No suitable space found on any track\n";
-    return { track: null, time: null, trackIndex: null, debugLog: debugLog };
+
+    try {
+        addDebugMessage("Starting findPlacementLocation");
+        addDebugMessage("startIndex: " + startIndex + ", playheadTime: " + playheadTime.seconds + ", clipDuration: " + clipDuration.seconds);
+
+        var originalStartIndex = startIndex;
+
+        // Check if sequence and audioTracks are defined
+        if (!sequence || !sequence.audioTracks) {
+            throw new Error("Sequence or audioTracks is undefined");
+        }
+
+        addDebugMessage("Total audio tracks: " + sequence.audioTracks.numTracks);
+
+        // Loop through all available tracks starting from the provided index
+        for (var i = startIndex; i < sequence.audioTracks.numTracks; i++) {
+            var track = sequence.audioTracks[i];
+            addDebugMessage("Checking track " + (i + 1));
+
+            // Check if the track is not locked
+            if (!track.isLocked()) {
+                addDebugMessage("Track " + (i + 1) + " is unlocked");
+                
+                // Try to find space on this track for the given clip duration
+                var spaceResult = findSpaceOnTrack(track, playheadTime, clipDuration);
+                debugLog += spaceResult.debugLog;
+
+                // If there's space on this track, use it
+                if (spaceResult.space) {
+                    addDebugMessage("Space found on track " + (i + 1) + " at " + spaceResult.space.seconds.toFixed(2) + " seconds");
+                    return { track: track, time: spaceResult.space, trackIndex: i, debugLog: debugLog };
+                } else {
+                    addDebugMessage("No space found on track " + (i + 1) + ". Moving to next track.");
+                }
+            } else {
+                addDebugMessage("Track " + (i + 1) + " is locked");
+            }
+        }
+
+        // If no space was found on any of the existing tracks, create a new one
+        addDebugMessage("No suitable space found on any available track. Creating a new track.");
+        var newTrackIndex = sequence.audioTracks.numTracks;
+        var newTrack = sequence.audioTracks.add();
+        addDebugMessage("New track created at index " + (newTrackIndex + 1));
+
+        return { track: newTrack, time: playheadTime, trackIndex: newTrackIndex, debugLog: debugLog };
+    } catch (e) {
+        addDebugMessage("Error in findPlacementLocation: " + e.toString());
+        if (e.stack) {
+            addDebugMessage("Error stack: " + e.stack);
+        }
+        return { track: null, time: null, trackIndex: null, debugLog: debugLog };
+    }
 }
 
-function findSpaceOnTrack(track, playheadTime, clipDuration) {
+function findSpaceOnTrack(track, startTime, clipDuration) {
+    var debugLog = "";
     var endTime = new Time();
-    endTime.seconds = playheadTime.seconds + clipDuration.seconds;
+    endTime.seconds = startTime.seconds + clipDuration.seconds;
 
-    // Check if there's space at the playhead position
-    if (isSpaceFree(track, playheadTime, endTime)) {
-        return playheadTime;
+    debugLog += "Searching for space on track. Start time: " + startTime.seconds.toFixed(2) + ", End time: " + endTime.seconds.toFixed(2) + "\n";
+
+    // Check if there's space at the start position
+    if (isSpaceFree(track, startTime, endTime)) {
+        debugLog += "Space found at start position\n";
+        return { space: startTime, debugLog: debugLog };
     }
 
-    // If not, find the next available space
-    var lastClipEnd = playheadTime.seconds;
-    for (var i = 0; i < track.clips.numItems; i++) {
-        var clip = track.clips[i];
-        if (clip.start.seconds > lastClipEnd + 0.01) { // 0.01 second buffer
-            var spaceStart = new Time();
-            spaceStart.seconds = lastClipEnd;
-            if (isSpaceFree(track, spaceStart, endTime)) {
-                return spaceStart;
-            }
+    // If not, search for the next available space after the existing clips
+    var trackDuration = track.end ? track.end.seconds : 0;
+    var currentTime = new Time();
+    currentTime.seconds = startTime.seconds;
+
+    while (currentTime.seconds < trackDuration) {
+        endTime.seconds = currentTime.seconds + clipDuration.seconds;
+        
+        debugLog += "Checking space from " + currentTime.seconds.toFixed(2) + " to " + endTime.seconds.toFixed(2) + "\n";
+        
+        if (isSpaceFree(track, currentTime, endTime)) {
+            debugLog += "Space found at " + currentTime.seconds.toFixed(2) + "\n";
+            return { space: currentTime, debugLog: debugLog };
         }
-        lastClipEnd = Math.max(lastClipEnd, clip.end.seconds);
+
+        // Move to the next clip end or a small increment if there are no more clips
+        var nextClipStart = findNextClipStart(track, currentTime);
+        if (nextClipStart !== null) {
+            debugLog += "Moving to next clip start at " + nextClipStart.toFixed(2) + "\n";
+            currentTime.seconds = nextClipStart;
+        } else {
+            currentTime.seconds += 0.1; // Move in small increments if no more clips
+            debugLog += "No more clips found. Moving to " + currentTime.seconds.toFixed(2) + "\n";
+        }
     }
 
-    // If no space found, return null
-    return null;
+    debugLog += "No space found on this track\n";
+    return { space: null, debugLog: debugLog };
 }
 
 function isSpaceFree(track, startTime, endTime) {
+    if (!track.clips || track.clips.numItems === 0) {
+        return true; // If there are no clips, the space is free
+    }
     for (var i = 0; i < track.clips.numItems; i++) {
         var clip = track.clips[i];
         if (clip.start.seconds < endTime.seconds && clip.end.seconds > startTime.seconds) {
-            return false;
+            return false; // Overlapping clip found
         }
     }
-    return true;
+    return true; // Space is free
+}
+
+function findNextClipStart(track, currentTime) {
+    if (!track.clips || track.clips.numItems === 0) {
+        return null; // If there are no clips, return null
+    }
+    var nextStart = null;
+    for (var i = 0; i < track.clips.numItems; i++) {
+        var clip = track.clips[i];
+        if (clip.start.seconds > currentTime.seconds) {
+            if (nextStart === null || clip.start.seconds < nextStart) {
+                nextStart = clip.start.seconds;
+            }
+        }
+    }
+    return nextStart;
 }
