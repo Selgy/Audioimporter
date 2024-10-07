@@ -76,31 +76,33 @@ jobs:
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
-          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}  # You'll need to add this secret
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           # Zip the ZXP file for notarization
           ditto -c -k --keepParent ./dist/zxp/com.AudioImporterV2.cep.zxp ./dist/zxp/com.AudioImporterV2.cep.zxp.zip
           
           # Submit for notarization
-          xcrun notarytool submit ./dist/zxp/com.AudioImporterV2.cep.zxp.zip --wait --apple-id "$APPLE_ID" --password "$APPLE_ID_PASSWORD" --team-id "$TEAM_ID"
+          SUBMISSION_ID=$(xcrun notarytool submit ./dist/zxp/com.AudioImporterV2.cep.zxp.zip --wait --apple-id "$APPLE_ID" --password "$APPLE_ID_PASSWORD" --team-id "$TEAM_ID" | grep "id:" | awk '{print $2}')
           
-          if [ $? -eq 0 ]; then
-            echo "Notarization request submitted and completed successfully"
-          else
-            echo "Failed to submit or complete notarization request"
+          if [ -z "$SUBMISSION_ID" ]; then
+            echo "Failed to submit notarization request"
             exit 1
           fi
           
-          # Staple the notarization to the ZXP
-          xcrun stapler staple ./dist/zxp/com.AudioImporterV2.cep.zxp
+          # Check notarization status and get logs
+          xcrun notarytool log "$SUBMISSION_ID" --apple-id "$APPLE_ID" --password "$APPLE_ID_PASSWORD" --team-id "$TEAM_ID"
           
-          if [ $? -eq 0 ]; then
-            echo "Notarization stapled successfully"
-          else
-            echo "Failed to staple notarization"
+          # Check if notarization was successful
+          NOTARIZATION_STATUS=$(xcrun notarytool info "$SUBMISSION_ID" --apple-id "$APPLE_ID" --password "$APPLE_ID_PASSWORD" --team-id "$TEAM_ID" | grep "status:" | awk '{print $2}')
+          
+          if [ "$NOTARIZATION_STATUS" != "Accepted" ]; then
+            echo "Notarization failed with status: $NOTARIZATION_STATUS"
             exit 1
           fi
-
+          
+          echo "Notarization completed successfully"
+          
+          # Note: Skipping stapling step for ZXP files
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
