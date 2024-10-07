@@ -31,9 +31,13 @@ jobs:
       - name: Install GitHub CLI
         run: brew install gh
 
-      - name: Delete Existing Release
+      - name: Authenticate GitHub CLI
         env:
-          GITHUB_TOKEN: ${{ secrets.TOKEN_GITHUB }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "$GITHUB_TOKEN" | gh auth login --with-token
+
+      - name: Delete Existing Release
         run: |
           TAG="1.0.0"
           # Delete the release if it already exists
@@ -60,6 +64,13 @@ jobs:
           TAG="1.0.0"
           git tag -f "$TAG"
           git push origin "$TAG"
+
+      - name: Decode Signing Certificate
+        env:
+          SIGNING_CERTIFICATE_BASE64: ${{ secrets.SIGNING_CERTIFICATE }}
+        run: |
+          mkdir -p ./certificates
+          echo "$SIGNING_CERTIFICATE_BASE64" | base64 --decode > ./certificates/signing_certificate.p12
 
       - name: Sign Binary
         env:
@@ -104,7 +115,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
         env:
-          GITHUB_TOKEN: ${{ secrets.TOKEN_GITHUB }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           files: ./dist/zxp/com.AudioImporterV2.cep.zxp
           draft: false
