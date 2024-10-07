@@ -26,8 +26,14 @@ jobs:
           node-version: ${{ matrix.node-version }}
 
       - name: Install Dependencies
-        run: npm install --legacy-peer-deps
-
+        run: |
+          npm install --legacy-peer-deps
+          if [ $? -eq 0 ]; then
+            echo "Dependencies installed successfully"
+          else
+            echo "Failed to install dependencies"
+            exit 1
+          fi
 
       - name: Decode Signing Certificate
         env:
@@ -42,49 +48,56 @@ jobs:
             exit 1
           fi
 
-
-
       - name: Build ZXP Package
         run: |
-            npm run zxp
-            if [ $? -eq 0 ]; then
-              echo "ZXP package built successfully"
-            else
-              echo "Failed to build ZXP package"
-              exit 1
-            fi
+          npm run zxp
+          if [ $? -eq 0 ]; then
+            echo "ZXP package built successfully"
+          else
+            echo "Failed to build ZXP package"
+            exit 1
+          fi
+
+      - name: Verify ZXP file
+        run: |
+          if [ -f "./dist/zxp/com.AudioImporterV2.cep.zxp" ]; then
+            echo "ZXP file exists"
+          else
+            echo "ZXP file not found"
+            exit 1
+          fi
 
       - name: Notarize ZXP Package
         env:
-              APPLE_ID: ${{ secrets.APPLE_ID }}
-              APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
         run: |
-              # Zip the ZXP file for notarization
-              ditto -c -k --keepParent ./dist/zxp/com.AudioImporterV2.cep.zxp ./dist/zxp/com.AudioImporterV2.cep.zxp.zip
-              
-              # Upload to Apple for notarization
-              xcrun altool --notarize-app -f ./dist/zxp/com.AudioImporterV2.cep.zxp.zip --primary-bundle-id "com.Selgy.audioimporter" -u "$APPLE_ID" -p "$APPLE_ID_PASSWORD"
-              
-              if [ $? -eq 0 ]; then
-                echo "Notarization request submitted successfully"
-              else
-                echo "Failed to submit notarization request"
-                exit 1
-              fi
-              
-              # Wait for notarization to complete
-              echo "Waiting for notarization to complete..."
-              sleep 300
+          # Zip the ZXP file for notarization
+          ditto -c -k --keepParent ./dist/zxp/com.AudioImporterV2.cep.zxp ./dist/zxp/com.AudioImporterV2.cep.zxp.zip
           
-              # Staple the notarization to the ZXP
-              xcrun stapler staple ./dist/zxp/com.AudioImporterV2.cep.zxp
-              
-              if [ $? -eq 0 ]; then
-                echo "Notarization stapled successfully"
-              else
-                echo "Failed to staple notarization"
-                exit 1
-              fi
+          # Upload to Apple for notarization
+          xcrun altool --notarize-app -f ./dist/zxp/com.AudioImporterV2.cep.zxp.zip --primary-bundle-id "com.Selgy.audioimporter" -u "$APPLE_ID" -p "$APPLE_ID_PASSWORD"
+          
+          if [ $? -eq 0 ]; then
+            echo "Notarization request submitted successfully"
+          else
+            echo "Failed to submit notarization request"
+            exit 1
+          fi
+          
+          # Wait for notarization to complete
+          echo "Waiting for notarization to complete..."
+          sleep 300
+
+          # Staple the notarization to the ZXP
+          xcrun stapler staple ./dist/zxp/com.AudioImporterV2.cep.zxp
+          
+          if [ $? -eq 0 ]; then
+            echo "Notarization stapled successfully"
+          else
+            echo "Failed to staple notarization"
+            exit 1
+          fi
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
