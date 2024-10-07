@@ -36,23 +36,28 @@ jobs:
           mkdir -p ./certificates
           echo "$SIGNING_CERTIFICATE_BASE64" | base64 --decode > ./certificates/signing_certificate.p12
 
-      - name: Sign Binary
+      - name: Sign Binary with Detailed Timing and Timeout
         env:
           KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }} 
         run: |
-          # Create a new keychain for signing
-          security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
-          security list-keychains -s build.keychain
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
-          
+          echo "[$(date)] Starting keychain setup..."
+          # Use the default login keychain
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" login.keychain
+      
+          echo "[$(date)] Importing signing certificate..."
           # Import the code signing certificate (p12 format) into the keychain
-          security import "./certificates/signing_certificate.p12" -k build.keychain -P "$KEYCHAIN_PASSWORD" -T /usr/bin/codesign
-          
-          # Sign the binary before it gets included in the ZXP
-          codesign --sign "Developer ID Application: mickael ducatez (9H8DB46V75)" --timestamp --options runtime --force --verbose ./dist/cep/target/release/audio_importer
-          
+          security import "./certificates/signing_certificate.p12" -k login.keychain -P "$KEYCHAIN_PASSWORD" -T /usr/bin/codesign
+      
+          echo "[$(date)] Starting code signing for audio_importer..."
+          # Add a timeout to prevent indefinite hang, and use verbose logging
+          timeout 5m codesign --sign "Developer ID Application: mickael ducatez (9H8DB46V75)" --timestamp --options runtime --force --verbose=4 ./dist/cep/target/release/audio_importer
+          echo "[$(date)] Code signing completed for audio_importer."
+      
+          echo "[$(date)] Starting verification for audio_importer..."
           # Verify the signature
-          codesign --verify ./dist/cep/target/release/audio_importer
+          codesign --verify --verbose=4 ./dist/cep/target/release/audio_importer
+          echo "[$(date)] Verification completed for audio_importer."
+      
 
       - name: Build ZXP Package
         run: npm run zxp
