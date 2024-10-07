@@ -1,0 +1,1 @@
+Box<(dyn std::error::Error + 'static)>

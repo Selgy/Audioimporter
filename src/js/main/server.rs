@@ -357,50 +357,9 @@ fn save_config(config: &Value) {
     fs::write(config_path, config_data).expect("Failed to write config file");
 }
 
-fn normalize_key_combination(key_combination: &str) -> String {
-    let key_map = HashMap::from([
-        ("LAlt", "Alt"),
-        ("RAlt", "Alt"),
-        ("LControl", "Ctrl"),
-        ("RControl", "Ctrl"),
-        ("ControlLeft", "Ctrl"),
-        ("ControlRight", "Ctrl"),
-        ("Numpad1", "1"),
-        ("Numpad2", "2"),
-        ("Numpad3", "3"),
-        ("Numpad4", "4"),
-        ("Numpad5", "5"),
-        ("Numpad6", "6"),
-        ("Numpad7", "7"),
-        ("Numpad8", "8"),
-        ("Numpad9", "9"),
-        ("Numpad0", "0"),
-        // Add more key mappings as needed
-    ]);
-
-    let priority = vec!["ctrl", "shift", "alt"];
-
-    let mut mapped_keys: Vec<String> = key_combination
-        .split('+')
-        .map(|key| key_map.get(key).unwrap_or(&key).to_lowercase())
-        .collect();
-
-    mapped_keys.sort_by(|a, b| {
-        let a_index = priority.iter().position(|x| x == a).unwrap_or(usize::MAX);
-        let b_index = priority.iter().position(|x| x == b).unwrap_or(usize::MAX);
-
-        if a_index == b_index {
-            a.cmp(b)
-        } else {
-            a_index.cmp(&b_index)
-        }
-    });
-
-    mapped_keys.join("+")
-}
-
 fn map_keycode(key: &Keycode) -> String {
     match format!("{:?}", key).as_str() {
+        // Number keys
         "Key1" => "1".to_string(),
         "Key2" => "2".to_string(),
         "Key3" => "3".to_string(),
@@ -411,6 +370,8 @@ fn map_keycode(key: &Keycode) -> String {
         "Key8" => "8".to_string(),
         "Key9" => "9".to_string(),
         "Key0" => "0".to_string(),
+        
+        // Numpad keys
         "Numpad0" => "Numpad0".to_string(),
         "Numpad1" => "Numpad1".to_string(),
         "Numpad2" => "Numpad2".to_string(),
@@ -421,6 +382,8 @@ fn map_keycode(key: &Keycode) -> String {
         "Numpad7" => "Numpad7".to_string(),
         "Numpad8" => "Numpad8".to_string(),
         "Numpad9" => "Numpad9".to_string(),
+        
+        // Function keys
         "F1" => "F1".to_string(),
         "F2" => "F2".to_string(),
         "F3" => "F3".to_string(),
@@ -433,20 +396,83 @@ fn map_keycode(key: &Keycode) -> String {
         "F10" => "F10".to_string(),
         "F11" => "F11".to_string(),
         "F12" => "F12".to_string(),
+        
+        // Numpad special keys
         "NumpadSlash" => "NumpadDivide".to_string(),
         "NumpadAsterisk" => "NumpadMultiply".to_string(),
         "NumpadMinus" => "NumpadSubtract".to_string(),
         "NumpadPlus" => "NumpadAdd".to_string(),
         "NumpadEnter" => "NumpadEnter".to_string(),
         "NumpadDot" => "NumpadDecimal".to_string(),
-        "ControlLeft" => "LControl".to_string(),
-        "ControlRight" => "RControl".to_string(),
-        "AltLeft" => "LAlt".to_string(),
-        "AltRight" => "RAlt".to_string(),
-        "ShiftLeft" => "LShift".to_string(),
-        "ShiftRight" => "RShift".to_string(),
-        "MetaLeft" => "LCommand".to_string(),
-        "MetaRight" => "RCommand".to_string(),
+        
+        // Modifier keys (Windows and macOS)
+        "ControlLeft" => "Ctrl".to_string(),
+        "ControlRight" => "Ctrl".to_string(),
+        "AltLeft" => "Alt".to_string(),
+        "AltRight" => "Alt".to_string(),
+        "ShiftLeft" => "Shift".to_string(),
+        "ShiftRight" => "Shift".to_string(),
+        "MetaLeft" => if cfg!(target_os = "macos") { "Cmd".to_string() } else { "Win".to_string() },
+        "MetaRight" => if cfg!(target_os = "macos") { "Cmd".to_string() } else { "Win".to_string() },
+        
+        // Other common keys
+        "Space" => "Space".to_string(),
+        "Return" => "Enter".to_string(),
+        "Escape" => "Esc".to_string(),
+        "Tab" => "Tab".to_string(),
+        "CapsLock" => "CapsLock".to_string(),
+        
+        // Default case
         _ => format!("{:?}", key),
     }
+}
+
+fn normalize_key_combination(key_combination: &str) -> String {
+    let key_map: HashMap<&str, &str> = [
+        ("LAlt", "Alt"),
+        ("RAlt", "Alt"),
+        ("LControl", "Ctrl"),
+        ("RControl", "Ctrl"),
+        ("ControlLeft", "Ctrl"),
+        ("ControlRight", "Ctrl"),
+        ("ShiftLeft", "Shift"),
+        ("ShiftRight", "Shift"),
+        ("MetaLeft", if cfg!(target_os = "macos") { "Cmd" } else { "Win" }),
+        ("MetaRight", if cfg!(target_os = "macos") { "Cmd" } else { "Win" }),
+        ("Numpad1", "1"),
+        ("Numpad2", "2"),
+        ("Numpad3", "3"),
+        ("Numpad4", "4"),
+        ("Numpad5", "5"),
+        ("Numpad6", "6"),
+        ("Numpad7", "7"),
+        ("Numpad8", "8"),
+        ("Numpad9", "9"),
+        ("Numpad0", "0"),
+    ].iter().cloned().collect();
+
+    let priority = if cfg!(target_os = "macos") {
+        vec!["Cmd", "Ctrl", "Alt", "Shift"]
+    } else {
+        vec!["Ctrl", "Alt", "Shift", "Win"]
+    };
+
+    let mut mapped_keys: Vec<String> = key_combination
+        .split('+')
+        .map(|key| key_map.get(key).unwrap_or(&key).to_string())
+        .collect();
+
+    mapped_keys.sort_by(|a, b| {
+        let a_index = priority.iter().position(|x| x.eq_ignore_ascii_case(a)).unwrap_or(usize::MAX);
+        let b_index = priority.iter().position(|x| x.eq_ignore_ascii_case(b)).unwrap_or(usize::MAX);
+
+        if a_index == b_index {
+            a.cmp(b)
+        } else {
+            a_index.cmp(&b_index)
+        }
+    });
+
+    mapped_keys.dedup(); // Remove duplicates
+    mapped_keys.join("+")
 }

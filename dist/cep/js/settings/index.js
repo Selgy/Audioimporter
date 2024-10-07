@@ -6,29 +6,40 @@ function startRustServer() {
     console.log("Starting Rust server...");
     if (typeof process !== 'undefined' && process.versions != null && process.versions.node != null) {
         console.log("Node.js environment detected. Node version:", process.version);
-
-        // Get the extension root path
         const extensionRoot = getExtensionRootPath();
         console.log('Extension root path:', extensionRoot);
+        let decodedPath = decodeURIComponent(extensionRoot.replace('file:', ''));
+        console.log('Decoded Extension Root Path:', decodedPath);
 
-        // Correcting the path construction
-        let rustExecutablePath = path.join(extensionRoot, 'target', 'release', 'audio_importer.exe');
-
-        // Normalize the path and remove any 'file:' prefix
-        rustExecutablePath = rustExecutablePath.replace('file:\\', ''); // Remove file: prefix for Windows path
-        rustExecutablePath = path.normalize(rustExecutablePath); // Normalize the path
+        let rustExecutablePath;
+        if (process.platform === 'win32') {
+            rustExecutablePath = path.join(decodedPath, 'target', 'release', 'audio_importer.exe');
+        } else if (process.platform === 'darwin') {
+            rustExecutablePath = path.join(decodedPath, 'target', 'release', 'audio_importer');
+        } else {
+            console.error(`Unsupported platform: ${process.platform}`);
+            return;
+        }
+        rustExecutablePath = path.normalize(rustExecutablePath); 
         console.log('Corrected Rust executable path:', rustExecutablePath);
 
-        // Check if the file exists at the normalized path
         if (!fs.existsSync(rustExecutablePath)) {
             console.error(`Rust executable not found at ${rustExecutablePath}`);
             return;
         }
 
         const child = spawn(rustExecutablePath, [], {
-            cwd: path.dirname(rustExecutablePath), // Set working directory to executable's directory
-            env: process.env,
-            stdio: 'inherit',
+            cwd: path.dirname(rustExecutablePath),
+            env: {...process.env, RUST_BACKTRACE: '1'},
+            stdio: ['inherit', 'pipe', 'pipe']
+        });
+
+        child.stdout.on('data', (data) => {
+            console.log(`Rust server stdout: ${data}`);
+        });
+
+        child.stderr.on('data', (data) => {
+            console.error(`Rust server stderr: ${data}`);
         });
 
         child.on('error', (err) => {

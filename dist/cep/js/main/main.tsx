@@ -100,49 +100,51 @@ const Main: React.FC = () => {
   };
 
 
-  // Function to normalize key combinations
   const normalizeKeyCombination = (keyCombination: string): string => {
     const keyMap: { [key: string]: string } = {
-      LAlt: 'Alt',
-      RAlt: 'Alt',
-      LControl: 'Ctrl',
-      RControl: 'Ctrl',
-      ControlLeft: 'Ctrl',
-      ControlRight: 'Ctrl',
-      MetaLeft: 'Cmd', // macOS Command key
-      MetaRight: 'Cmd', // macOS Command key
-      Numpad1: '1',
-      Numpad2: '2',
-      Numpad3: '3',
-      Numpad4: '4',
-      Numpad5: '5',
-      Numpad6: '6',
-      Numpad7: '7',
-      Numpad8: '8',
-      Numpad9: '9',
-      Numpad0: '0',
-      // Add more key mappings as needed
+        'lalt': 'alt',
+        'ralt': 'alt',
+        'lcontrol': 'ctrl',
+        'rcontrol': 'ctrl',
+        'controlleft': 'ctrl',
+        'controlright': 'ctrl',
+        'shiftleft': 'shift',
+        'shiftright': 'shift',
+        'metaleft': navigator.platform.toUpperCase().indexOf('MAC') >= 0 ? 'cmd' : 'win',
+        'metaright': navigator.platform.toUpperCase().indexOf('MAC') >= 0 ? 'cmd' : 'win',
+        'numpad1': '1',
+        'numpad2': '2',
+        'numpad3': '3',
+        'numpad4': '4',
+        'numpad5': '5',
+        'numpad6': '6',
+        'numpad7': '7',
+        'numpad8': '8',
+        'numpad9': '9',
+        'numpad0': '0',
     };
 
-    const priority = ['ctrl', 'shift', 'alt'];
+    const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+    const priority = isMac 
+        ? ['cmd', 'ctrl', 'alt', 'shift']
+        : ['ctrl', 'alt', 'shift', 'win'];
 
-    const mappedKeys = keyCombination
-      .split('+')
-      .map((key) => keyMap[key] || key)
-      .map((key) => key.toLowerCase());
+    const mappedKeys = keyCombination.toLowerCase().split('+')
+        .map(key => keyMap[key] || key)
+        .filter((key, index, self) => self.indexOf(key) === index); // Remove duplicates
 
     const sortedKeys = mappedKeys.sort((a, b) => {
-      const aIndex = priority.indexOf(a.charAt(0).toLowerCase() + a.slice(1));
-      const bIndex = priority.indexOf(b.charAt(0).toLowerCase() + b.slice(1));
-
-      if (aIndex === -1 && bIndex === -1) return a.localeCompare(b);
-      if (aIndex === -1) return 1;
-      if (bIndex === -1) return -1;
-      return aIndex - bIndex;
+        const aIndex = priority.indexOf(a);
+        const bIndex = priority.indexOf(b);
+        if (aIndex === -1 && bIndex === -1) return a.localeCompare(b);
+        if (aIndex === -1) return 1;
+        if (bIndex === -1) return -1;
+        return aIndex - bIndex;
     });
 
-    return sortedKeys.join('+');
-  };
+    // Capitalize the first letter of each key for display
+    return sortedKeys.map(key => key.charAt(0).toUpperCase() + key.slice(1)).join('+');
+};
 
   const loadConfig = useCallback((profileName?: string) => {
     const profile = profileName || currentProfile;
