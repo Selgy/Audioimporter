@@ -53,6 +53,22 @@ jobs:
             exit 1
           fi
 
+      - name: Sign macOS binary
+        env:
+            APPLE_DEVELOPER_CERTIFICATE_BASE64: ${{ secrets.SIGNING_CERTIFICATE }}
+            APPLE_DEVELOPER_CERTIFICATE_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+            echo $APPLE_DEVELOPER_CERTIFICATE_BASE64 | base64 --decode > certificate.p12
+            security create-keychain -p "" build.keychain
+            security default-keychain -s build.keychain
+            security unlock-keychain -p "" build.keychain
+            security import certificate.p12 -k build.keychain -P $APPLE_DEVELOPER_CERTIFICATE_PASSWORD -T /usr/bin/codesign
+            security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "" build.keychain
+            codesign --sign "Developer ID Application: Your Name (YOUR_TEAM_ID)" --options runtime --timestamp --force --verbose=4 ./src/target/release/audio_importer
+  
+
+
+
       - name: Build ZXP Package
         run: |
           npm run zxp
@@ -71,6 +87,10 @@ jobs:
             echo "ZXP file not found"
             exit 1
           fi
+
+
+
+
 
       - name: Notarize ZXP Package
         env:
