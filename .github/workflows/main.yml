@@ -35,50 +35,56 @@ jobs:
         run: |
           mkdir -p ./certificates
           echo "$SIGNING_CERTIFICATE_BASE64" | base64 --decode > ./certificates/signing_certificate.p12
+          if [ $? -eq 0 ]; then
+            echo "Certificate decoded successfully"
+          else
+            echo "Failed to decode certificate"
+            exit 1
+          fi
 
-      - name: Sign Binary with Detailed Timing and Timeout
-        env:
-          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }} 
-        run: |
-          echo "[$(date)] Starting keychain setup..."
-          # Use the default login keychain
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" login.keychain
-      
-          echo "[$(date)] Importing signing certificate..."
-          # Import the code signing certificate (p12 format) into the keychain
-          security import "./certificates/signing_certificate.p12" -k login.keychain -P "$KEYCHAIN_PASSWORD" -T /usr/bin/codesign
-      
-          echo "[$(date)] Starting code signing for audio_importer..."
-          # Add a timeout to prevent indefinite hang, and use verbose logging
-          timeout 5m codesign --sign "Developer ID Application: mickael ducatez (9H8DB46V75)" --timestamp --options runtime --force --verbose=4 ./dist/cep/target/release/audio_importer
-          echo "[$(date)] Code signing completed for audio_importer."
-      
-          echo "[$(date)] Starting verification for audio_importer..."
-          # Verify the signature
-          codesign --verify --verbose=4 ./dist/cep/target/release/audio_importer
-          echo "[$(date)] Verification completed for audio_importer."
-      
+
 
       - name: Build ZXP Package
-        run: npm run zxp
+        run: |
+            npm run zxp
+            if [ $? -eq 0 ]; then
+              echo "ZXP package built successfully"
+            else
+              echo "Failed to build ZXP package"
+              exit 1
+            fi
 
       - name: Notarize ZXP Package
         env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+              APPLE_ID: ${{ secrets.APPLE_ID }}
+              APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
         run: |
-          # Zip the ZXP file for notarization
-          ditto -c -k --keepParent ./dist/zxp/com.AudioImporterV2.cep.zxp ./dist/zxp/com.AudioImporterV2.cep.zxp.zip
+              # Zip the ZXP file for notarization
+              ditto -c -k --keepParent ./dist/zxp/com.AudioImporterV2.cep.zxp ./dist/zxp/com.AudioImporterV2.cep.zxp.zip
+              
+              # Upload to Apple for notarization
+              xcrun altool --notarize-app -f ./dist/zxp/com.AudioImporterV2.cep.zxp.zip --primary-bundle-id "com.Selgy.audioimporter" -u "$APPLE_ID" -p "$APPLE_ID_PASSWORD"
+              
+              if [ $? -eq 0 ]; then
+                echo "Notarization request submitted successfully"
+              else
+                echo "Failed to submit notarization request"
+                exit 1
+              fi
+              
+              # Wait for notarization to complete
+              echo "Waiting for notarization to complete..."
+              sleep 300
           
-          # Upload to Apple for notarization
-          xcrun altool --notarize-app -f ./dist/zxp/com.AudioImporterV2.cep.zxp.zip --primary-bundle-id "com.Selgy.audioimporter" -u "$APPLE_ID" -p "$APPLE_ID_PASSWORD"
-          
-          # Wait for notarization to complete
-          echo "Waiting for notarization to complete..."
-          sleep 300
-
-          # Staple the notarization to the ZXP
-          xcrun stapler staple ./dist/zxp/com.AudioImporterV2.cep.zxp
+              # Staple the notarization to the ZXP
+              xcrun stapler staple ./dist/zxp/com.AudioImporterV2.cep.zxp
+              
+              if [ $? -eq 0 ]; then
+                echo "Notarization stapled successfully"
+              else
+                echo "Failed to staple notarization"
+                exit 1
+              fi
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
