@@ -57,18 +57,35 @@ jobs:
 
       - name: Sign macOS binary
         env:
-            APPLE_DEVELOPER_CERTIFICATE_BASE64: ${{ secrets.SIGNING_CERTIFICATE }}
-            APPLE_DEVELOPER_CERTIFICATE_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+              APPLE_DEVELOPER_CERTIFICATE_BASE64: ${{ secrets.SIGNING_CERTIFICATE }}
+              APPLE_DEVELOPER_CERTIFICATE_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
         run: |
-            echo $APPLE_DEVELOPER_CERTIFICATE_BASE64 | base64 --decode > certificate.p12
-            security create-keychain -p "" build.keychain
-            security default-keychain -s build.keychain
-            security unlock-keychain -p "" build.keychain
-            security import certificate.p12 -k build.keychain -P $APPLE_DEVELOPER_CERTIFICATE_PASSWORD -T /usr/bin/codesign
-            security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "" build.keychain
-            codesign --sign "Developer ID Application: mickael ducatez (9H8DB46V75)" --options runtime --timestamp --force --verbose=4 ./disp/target/release/audio_importer
+              echo $APPLE_DEVELOPER_CERTIFICATE_BASE64 | base64 --decode > certificate.p12
+              security create-keychain -p "" build.keychain
+              security default-keychain -s build.keychain
+              security unlock-keychain -p "" build.keychain
+              security import certificate.p12 -k build.keychain -P $APPLE_DEVELOPER_CERTIFICATE_PASSWORD -T /usr/bin/codesign
+              security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "" build.keychain
+              codesign --sign "Developer ID Application: mickael ducatez (9H8DB46V75)" --options runtime --timestamp --force --verbose=4 ./src/target/release/audio_importer
   
-
+      - name: Notarize audio_importer executable
+        env:
+            APPLE_ID: ${{ secrets.APPLE_ID }}
+            APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+            TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+            # Zip the executable for notarization
+            ditto -c -k --keepParent ./src/target/release/audio_importer ./audio_importer.zip
+            
+            # Submit for notarization
+            xcrun notarytool submit ./audio_importer.zip --wait --apple-id "$APPLE_ID" --password "$APPLE_ID_PASSWORD" --team-id "$TEAM_ID"
+            
+            # Staple the notarization ticket to the executable
+            xcrun stapler staple ./src/target/release/audio_importer
+            
+            # Verify the stapling
+            xcrun stapler validate ./src/target/release/audio_importer
+  
 
 
       - name: Build ZXP Package
