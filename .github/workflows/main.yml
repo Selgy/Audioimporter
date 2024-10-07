@@ -28,42 +28,6 @@ jobs:
       - name: Install Dependencies
         run: npm install --legacy-peer-deps
 
-      - name: Install GitHub CLI
-        run: brew install gh
-
-      - name: Authenticate GitHub CLI
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          echo "$GITHUB_TOKEN" | gh auth login --with-token
-
-      - name: Delete Existing Release
-        run: |
-          TAG="1.0.0"
-          # Delete the release if it already exists
-          if gh release view "$TAG"; then
-            echo "Deleting existing release $TAG"
-            gh release delete "$TAG" -y
-          else
-            echo "No existing release found for $TAG"
-          fi
-
-      - name: Delete Existing Tag
-        run: |
-          TAG="1.0.0"
-          # Delete the tag if it exists
-          if git ls-remote --tags origin | grep "refs/tags/$TAG$"; then
-            echo "Deleting existing tag $TAG"
-            git push origin --delete "$TAG"
-          else
-            echo "No existing tag found for $TAG"
-          fi
-
-      - name: Create Tag Again
-        run: |
-          TAG="1.0.0"
-          git tag -f "$TAG"
-          git push origin "$TAG"
 
       - name: Decode Signing Certificate
         env:
@@ -74,7 +38,7 @@ jobs:
 
       - name: Sign Binary
         env:
-          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }} 
         run: |
           # Create a new keychain for signing
           security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
