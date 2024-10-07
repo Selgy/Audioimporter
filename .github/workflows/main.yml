@@ -66,7 +66,7 @@ jobs:
             security unlock-keychain -p "" build.keychain
             security import certificate.p12 -k build.keychain -P $APPLE_DEVELOPER_CERTIFICATE_PASSWORD -T /usr/bin/codesign
             security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "" build.keychain
-            codesign --sign "Developer ID Application: mickael ducatez (9H8DB46V75)" --options runtime --timestamp --force --verbose=4 ./src/target/release/audio_importer
+            codesign --sign "Developer ID Application: mickael ducatez (9H8DB46V75)" --options runtime --timestamp --force --verbose=4 ./disp/target/release/audio_importer
   
 
 
@@ -136,7 +136,6 @@ jobs:
           echo "Notarization completed successfully"
           
           # Note: Skipping stapling step for ZXP files
-
 
 
 
