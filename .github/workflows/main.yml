@@ -3,7 +3,7 @@ name: ZXP Release
 on:
   push:
     tags:
-      - "*.*.*"
+      - "1.0.0"
 
 permissions:
   contents: write
