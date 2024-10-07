@@ -81,19 +81,30 @@ jobs:
           # Zip the ZXP file for notarization
           ditto -c -k --keepParent ./dist/zxp/com.AudioImporterV2.cep.zxp ./dist/zxp/com.AudioImporterV2.cep.zxp.zip
           
-          # Submit for notarization
-          SUBMISSION_ID=$(xcrun notarytool submit ./dist/zxp/com.AudioImporterV2.cep.zxp.zip --wait --apple-id "$APPLE_ID" --password "$APPLE_ID_PASSWORD" --team-id "$TEAM_ID" | grep "id:" | awk '{print $2}')
+          # Submit for notarization and capture the entire output
+          NOTARY_SUBMIT_OUTPUT=$(xcrun notarytool submit ./dist/zxp/com.AudioImporterV2.cep.zxp.zip --wait --apple-id "$APPLE_ID" --password "$APPLE_ID_PASSWORD" --team-id "$TEAM_ID")
+          echo "Notary submit output:"
+          echo "$NOTARY_SUBMIT_OUTPUT"
+          
+          # Extract the submission ID using a more robust method
+          SUBMISSION_ID=$(echo "$NOTARY_SUBMIT_OUTPUT" | grep "id:" | tail -n1 | awk '{print $NF}' | tr -d '[:space:]')
           
           if [ -z "$SUBMISSION_ID" ]; then
-            echo "Failed to submit notarization request"
+            echo "Failed to extract submission ID"
             exit 1
           fi
+          
+          echo "Extracted Submission ID: $SUBMISSION_ID"
           
           # Check notarization status and get logs
           xcrun notarytool log "$SUBMISSION_ID" --apple-id "$APPLE_ID" --password "$APPLE_ID_PASSWORD" --team-id "$TEAM_ID"
           
           # Check if notarization was successful
-          NOTARIZATION_STATUS=$(xcrun notarytool info "$SUBMISSION_ID" --apple-id "$APPLE_ID" --password "$APPLE_ID_PASSWORD" --team-id "$TEAM_ID" | grep "status:" | awk '{print $2}')
+          NOTARIZATION_INFO=$(xcrun notarytool info "$SUBMISSION_ID" --apple-id "$APPLE_ID" --password "$APPLE_ID_PASSWORD" --team-id "$TEAM_ID")
+          echo "Notarization Info:"
+          echo "$NOTARIZATION_INFO"
+          
+          NOTARIZATION_STATUS=$(echo "$NOTARIZATION_INFO" | grep "status:" | awk '{print $2}')
           
           if [ "$NOTARIZATION_STATUS" != "Accepted" ]; then
             echo "Notarization failed with status: $NOTARIZATION_STATUS"
@@ -103,6 +114,10 @@ jobs:
           echo "Notarization completed successfully"
           
           # Note: Skipping stapling step for ZXP files
+
+
+
+
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
