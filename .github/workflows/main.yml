@@ -70,23 +70,47 @@ jobs:
   
       - name: Notarize audio_importer executable
         env:
-            APPLE_ID: ${{ secrets.APPLE_ID }}
-            APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
-            TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+                APPLE_ID: ${{ secrets.APPLE_ID }}
+                APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+                TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-            # Zip the executable for notarization
-            ditto -c -k --keepParent ./src/target/release/audio_importer ./audio_importer.zip
-            
-            # Submit for notarization
-            xcrun notarytool submit ./audio_importer.zip --wait --apple-id "$APPLE_ID" --password "$APPLE_ID_PASSWORD" --team-id "$TEAM_ID"
-            
-            # Staple the notarization ticket to the executable
-            xcrun stapler staple ./src/target/release/audio_importer
-            
-            # Verify the stapling
-            xcrun stapler validate ./src/target/release/audio_importer
-  
-
+                # Zip the executable for notarization
+                ditto -c -k --keepParent ./src/target/release/audio_importer ./audio_importer.zip
+                
+                # Submit for notarization
+                NOTARY_SUBMIT_OUTPUT=$(xcrun notarytool submit ./audio_importer.zip --wait --apple-id "$APPLE_ID" --password "$APPLE_ID_PASSWORD" --team-id "$TEAM_ID")
+                echo "Notary submit output:"
+                echo "$NOTARY_SUBMIT_OUTPUT"
+                
+                # Extract the submission ID
+                SUBMISSION_ID=$(echo "$NOTARY_SUBMIT_OUTPUT" | grep "id:" | tail -n1 | awk '{print $NF}' | tr -d '[:space:]')
+                
+                if [ -z "$SUBMISSION_ID" ]; then
+                  echo "Failed to extract submission ID"
+                  exit 1
+                fi
+                
+                echo "Extracted Submission ID: $SUBMISSION_ID"
+                
+                # Check notarization status and get logs
+                xcrun notarytool log "$SUBMISSION_ID" --apple-id "$APPLE_ID" --password "$APPLE_ID_PASSWORD" --team-id "$TEAM_ID"
+                
+                # Check if notarization was successful
+                NOTARIZATION_INFO=$(xcrun notarytool info "$SUBMISSION_ID" --apple-id "$APPLE_ID" --password "$APPLE_ID_PASSWORD" --team-id "$TEAM_ID")
+                echo "Notarization Info:"
+                echo "$NOTARIZATION_INFO"
+                
+                NOTARIZATION_STATUS=$(echo "$NOTARIZATION_INFO" | grep "status:" | awk '{print $2}')
+                
+                if [ "$NOTARIZATION_STATUS" != "Accepted" ]; then
+                  echo "Notarization failed with status: $NOTARIZATION_STATUS"
+                  exit 1
+                fi
+                
+                echo "Notarization completed successfully"
+                
+                # Note: Skipping stapling step for command-line tool
+                echo "Skipping stapling step for command-line tool"
 
       - name: Build ZXP Package
         run: |
