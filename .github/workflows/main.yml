@@ -3,14 +3,14 @@ name: ZXP Release
 on:
   push:
     tags:
-      - "1.0.0"  # Match any tag, not just "1.0.0". If you want only "1.0.0", you can keep using "1.0.0".
+      - "1.0.0"  # Trigger only for the specific tag "1.0.0"
 
 permissions:
   contents: write
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: macos-latest  # Use macOS to handle code signing and notarization
 
     strategy:
       matrix:
@@ -28,11 +28,44 @@ jobs:
       - name: Install Dependencies
         run: npm install --legacy-peer-deps
 
+      - name: Sign Binary
+        env:
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          # Create a new keychain for signing
+          security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security list-keychains -s build.keychain
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          
+          # Import the code signing certificate (p12 format) into the keychain
+          security import "./certificates/signing_certificate.p12" -k build.keychain -P "$KEYCHAIN_PASSWORD" -T /usr/bin/codesign
+          
+          # Sign the binary before it gets included in the ZXP
+          codesign --deep --force --verbose --sign "Developer ID Application: mickael ducatez 9H8DB46V75" ./dist/cep/target/release/audio_importer
+          
+          # Verify the signature
+          codesign --verify --deep --strict ./dist/cep/target/release/audio_importer
+
       - name: Build ZXP Package
         run: npm run zxp
 
-      - name: Verify Files in Directory (Debug Step)
-        run: ls -R ./dist/zxp
+      - name: Notarize ZXP Package
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+        run: |
+          # Zip the ZXP file for notarization
+          ditto -c -k --keepParent ./dist/zxp/com.AudioImporterV2.cep.zxp ./dist/zxp/com.AudioImporterV2.cep.zxp.zip
+          
+          # Upload to Apple for notarization
+          xcrun altool --notarize-app -f ./dist/zxp/com.AudioImporterV2.cep.zxp.zip --primary-bundle-id "com.Selgy.audioimporter" -u "$APPLE_ID" -p "$APPLE_ID_PASSWORD"
+          
+          # Wait for notarization to complete
+          echo "Waiting for notarization to complete..."
+          sleep 300
+
+          # Staple the notarization to the ZXP
+          xcrun stapler staple ./dist/zxp/com.AudioImporterV2.cep.zxp
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
