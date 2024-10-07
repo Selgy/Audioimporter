@@ -141,12 +141,21 @@ jobs:
 
 
 
+      - name: Create Tag if Not Exists
+        run: |
+            if ! git rev-parse v1.0.0 >/dev/null 2>&1; then
+              git config user.name github-actions
+              git config user.email github-actions@github.com
+              git tag v1.0.0
+              git push origin v1.0.0
+            fi
+  
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         env:
             GITHUB_TOKEN: ${{ secrets.TOKEN_GITHUB }}
         with:
             files: ./dist/zxp/com.AudioImporterV2.cep.zxp
-            draft: ${{ !startsWith(github.ref, 'refs/tags/') }}
+            tag_name: v1.0.0
+            draft: false
             prerelease: false
-            tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('v{0}', github.run_number) }}
