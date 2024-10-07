@@ -2,8 +2,8 @@ name: ZXP Release
 
 on:
   push:
-    tags:
-      - "1.0.0"  # Trigger only for the specific tag "1.0.0"
+    branches:
+      - main  # Trigger on push to the main branch
 
 permissions:
   contents: write
