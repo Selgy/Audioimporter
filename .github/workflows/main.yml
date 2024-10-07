@@ -3,14 +3,14 @@ name: ZXP Release
 on:
   push:
     branches:
-      - main  # Trigger on push to the main branch
+      - main
 
 permissions:
   contents: write
 
 jobs:
   build:
-    runs-on: macos-latest  # Use macOS to handle code signing and notarization
+    runs-on: macos-latest
 
     strategy:
       matrix:
@@ -20,23 +20,23 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v2
 
-      - name: Make ZXPSignCmd executable
-        run: |
-          chmod +x ./ZXPSignCmd
-          echo "ZXPSignCmd is now executable"
-
       - name: Set up Node.js
         uses: actions/setup-node@v2
         with:
           node-version: ${{ matrix.node-version }}
 
       - name: Install Dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Locate and make ZXPSignCmd executable
         run: |
-          npm install --legacy-peer-deps
-          if [ $? -eq 0 ]; then
-            echo "Dependencies installed successfully"
+          find . -name "ZXPSignCmd" -type f -print
+          ZXP_CMD=$(find . -name "ZXPSignCmd" -type f | head -n 1)
+          if [ -n "$ZXP_CMD" ]; then
+            chmod +x "$ZXP_CMD"
+            echo "Made $ZXP_CMD executable"
           else
-            echo "Failed to install dependencies"
+            echo "ZXPSignCmd not found"
             exit 1
           fi
 
@@ -55,13 +55,13 @@ jobs:
 
       - name: Build ZXP Package
         run: |
-            npm run zxp
-            if [ $? -eq 0 ]; then
-              echo "ZXP package built successfully"
-            else
-              echo "Failed to build ZXP package"
-              exit 1
-            fi
+          npm run zxp
+          if [ $? -eq 0 ]; then
+            echo "ZXP package built successfully"
+          else
+            echo "Failed to build ZXP package"
+            exit 1
+          fi
 
       - name: Verify ZXP file
         run: |
