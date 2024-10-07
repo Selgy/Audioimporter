@@ -3,7 +3,7 @@ name: ZXP Release
 on:
   push:
     tags:
-      - "1.0.0"
+      - "1.0.0"  # Match any tag, not just "1.0.0". If you want only "1.0.0", you can keep using "1.0.0".
 
 permissions:
   contents: write
@@ -15,22 +15,31 @@ jobs:
     strategy:
       matrix:
         node-version: [18.x]
+
     steps:
-      - uses: actions/checkout@v2
-      - name: Use Node.js ${{ matrix.node-version }}
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+
+      - name: Set up Node.js
         uses: actions/setup-node@v2
         with:
           node-version: ${{ matrix.node-version }}
-      - run: npm i --legacy-peer-deps
-      - run: npm run zxp
 
-      - name: GitHub Release
+      - name: Install Dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Build ZXP Package
+        run: npm run zxp
+
+      - name: Verify Files in Directory (Debug Step)
+        run: ls -R ./dist/zxp
+
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
-          SOURCE_NAME: ${{ steps.extract_names.outputs.SOURCE_NAME }}
-          SOURCE_BRANCH: ${{ steps.extract_names.outputs.SOURCE_BRANCH }}
-          SOURCE_TAG: ${{ steps.extract_names.outputs.SOURCE_TAG }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           files: ./dist/zxp/com.AudioImporterV2.cep.zxp
+          draft: false
+          prerelease: false
