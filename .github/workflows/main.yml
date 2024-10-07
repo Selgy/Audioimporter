@@ -20,6 +20,11 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v2
 
+      - name: Make ZXPSignCmd executable
+        run: |
+          chmod +x ./ZXPSignCmd
+          echo "ZXPSignCmd is now executable"
+
       - name: Set up Node.js
         uses: actions/setup-node@v2
         with:
@@ -50,13 +55,13 @@ jobs:
 
       - name: Build ZXP Package
         run: |
-          npm run zxp
-          if [ $? -eq 0 ]; then
-            echo "ZXP package built successfully"
-          else
-            echo "Failed to build ZXP package"
-            exit 1
-          fi
+            npm run zxp
+            if [ $? -eq 0 ]; then
+              echo "ZXP package built successfully"
+            else
+              echo "Failed to build ZXP package"
+              exit 1
+            fi
 
       - name: Verify ZXP file
         run: |
