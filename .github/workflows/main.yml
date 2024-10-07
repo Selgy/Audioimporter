@@ -49,7 +49,7 @@ jobs:
           security import "./certificates/signing_certificate.p12" -k build.keychain -P "$KEYCHAIN_PASSWORD" -T /usr/bin/codesign
           
           # Sign the binary before it gets included in the ZXP
-          codesign --deep --force --verbose --sign "Developer ID Application: mickael ducatez 9H8DB46V75" ./dist/cep/target/release/audio_importer
+          codesign --deep --force --verbose --sign "Developer ID Application: mickael ducatez (9H8DB46V75)" ./dist/cep/target/release/audio_importer
           
           # Verify the signature
           codesign --verify --deep --strict ./dist/cep/target/release/audio_importer
