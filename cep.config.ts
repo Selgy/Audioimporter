@@ -57,10 +57,10 @@ const config: CEP_Config = {
     sourceMap: true,
   },
   zxp: {
-    country: "US",
+    country: "FR",
     province: "CA",
     org: "MyCompany",
-    password: "mypassword",
+    password: "test",
     tsa: "http://timestamp.digicert.com/",
     sourceMap: false,
     jsxBin: "off",
