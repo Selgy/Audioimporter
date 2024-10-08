@@ -2,6 +2,8 @@ const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
+let rustServerProcess = null;
+
 function startRustServer() {
     console.log("Starting Rust server...");
     if (typeof process !== 'undefined' && process.versions != null && process.versions.node != null) {
@@ -9,8 +11,15 @@ function startRustServer() {
         const extensionRoot = getExtensionRootPath();
         console.log('Extension root path:', extensionRoot);
 
-        // Decode the URI and remove 'file:' for Windows paths
-        let decodedPath = decodeURIComponent(extensionRoot.replace(/^file:[/\\]*/, '')); // Remove 'file:' and any leading slashes or backslashes
+        let decodedPath;
+        if (process.platform === 'win32') {
+            decodedPath = decodeURIComponent(extensionRoot.replace(/^file:[/\\]*/, ''));
+        } else if (process.platform === 'darwin') {
+            decodedPath = '/' + decodeURIComponent(extensionRoot.replace(/^file:\/\//, ''));
+        } else {
+            console.error(`Unsupported platform: ${process.platform}`);
+            return;
+        }
         console.log('Decoded Extension Root Path:', decodedPath);
 
         let rustExecutablePath;
@@ -22,43 +31,50 @@ function startRustServer() {
             console.error(`Unsupported platform: ${process.platform}`);
             return;
         }
-
         rustExecutablePath = path.normalize(rustExecutablePath);
         console.log('Corrected Rust executable path:', rustExecutablePath);
 
-        // Check if the Rust executable exists
         if (!fs.existsSync(rustExecutablePath)) {
             console.error(`Rust executable not found at ${rustExecutablePath}`);
             return;
         }
 
-        const child = spawn(rustExecutablePath, [], {
+        rustServerProcess = spawn(rustExecutablePath, [], {
             cwd: path.dirname(rustExecutablePath),
             env: {...process.env, RUST_BACKTRACE: '1'},
-            stdio: ['inherit', 'pipe', 'pipe']
+            stdio: ['inherit', 'pipe', 'pipe'],
+            detached: false // Ensure the child process is not detached
         });
 
-        child.stdout.on('data', (data) => {
+        rustServerProcess.stdout.on('data', (data) => {
             console.log(`Rust server stdout: ${data}`);
         });
 
-        child.stderr.on('data', (data) => {
+        rustServerProcess.stderr.on('data', (data) => {
             console.error(`Rust server stderr: ${data}`);
         });
 
-        child.on('error', (err) => {
+        rustServerProcess.on('error', (err) => {
             console.error(`Failed to start Rust server: ${err}`);
         });
 
-        child.on('close', (code) => {
+        rustServerProcess.on('close', (code) => {
             if (code !== 0) {
                 console.error(`Rust server process exited with code ${code}`);
             } else {
                 console.log('Rust server process exited successfully');
             }
+            rustServerProcess = null;
         });
     } else {
         console.error('This script should only be run in a Node.js environment.');
+    }
+}
+
+function stopRustServer() {
+    if (rustServerProcess) {
+        console.log("Stopping Rust server...");
+        rustServerProcess.kill();
     }
 }
 
@@ -73,3 +89,18 @@ function getExtensionRootPath() {
 
 console.log("Background script loaded. Starting Rust server...");
 startRustServer();
+
+// Handle extension shutdown
+process.on('exit', stopRustServer);
+process.on('SIGINT', stopRustServer);
+process.on('SIGTERM', stopRustServer);
+
+// For Windows, handle the SIGBREAK signal
+if (process.platform === 'win32') {
+    process.on('SIGBREAK', stopRustServer);
+}
+
+// If we're in the Adobe CEP environment, try to use its event system
+if (typeof window !== 'undefined' && window.__adobe_cep__) {
+    window.__adobe_cep__.addEventListener('com.adobe.csxs.events.ApplicationBeforeQuit', stopRustServer);
+}
