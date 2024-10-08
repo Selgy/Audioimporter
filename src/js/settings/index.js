@@ -8,7 +8,9 @@ function startRustServer() {
         console.log("Node.js environment detected. Node version:", process.version);
         const extensionRoot = getExtensionRootPath();
         console.log('Extension root path:', extensionRoot);
-        let decodedPath = decodeURIComponent(extensionRoot.replace('file:', ''));
+
+        // Decode the URI and remove 'file:' for Windows paths
+        let decodedPath = decodeURIComponent(extensionRoot.replace(/^file:[/\\]*/, '')); // Remove 'file:' and any leading slashes or backslashes
         console.log('Decoded Extension Root Path:', decodedPath);
 
         let rustExecutablePath;
@@ -20,9 +22,11 @@ function startRustServer() {
             console.error(`Unsupported platform: ${process.platform}`);
             return;
         }
-        rustExecutablePath = path.normalize(rustExecutablePath); 
+
+        rustExecutablePath = path.normalize(rustExecutablePath);
         console.log('Corrected Rust executable path:', rustExecutablePath);
 
+        // Check if the Rust executable exists
         if (!fs.existsSync(rustExecutablePath)) {
             console.error(`Rust executable not found at ${rustExecutablePath}`);
             return;
@@ -59,7 +63,7 @@ function startRustServer() {
 }
 
 function getExtensionRootPath() {
-    if (window.__adobe_cep__) {
+    if (typeof window !== 'undefined' && window.__adobe_cep__) {
         return window.__adobe_cep__.getSystemPath('extension');
     } else {
         // Fallback for development environment
