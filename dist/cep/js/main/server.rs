@@ -186,6 +186,21 @@ async fn handle_incoming_messages(
                         .await;
                 }
             }
+            else if text == "GET_CURRENT_PROFILE" {
+                let config_guard = config.lock().await;
+                if let Some(current_profile) = config_guard["currentProfile"].as_str() {
+                    let mut write_guard = write.lock().await;
+                    let _ = write_guard
+                        .send(Message::Text(format!("CURRENT_PROFILE:{}", current_profile)))
+                        .await;
+                } else {
+                    let mut write_guard = write.lock().await;
+                    let _ = write_guard
+                        .send(Message::Text("CURRENT_PROFILE:None".to_string()))
+                        .await;
+                }
+            }
+
             // Handle saving the last selected profile
             else if text.starts_with("SAVE_LAST_SELECTED_PROFILE:") {
                 let profile_name = text.replace("SAVE_LAST_SELECTED_PROFILE:", "");
@@ -240,6 +255,7 @@ async fn handle_incoming_messages(
             
                 if config_guard["profiles"][&profile_name].is_object() {
                     config_guard["currentProfile"] = serde_json::Value::String(profile_name.clone());
+                    config_guard["lastSelectedProfile"] = serde_json::Value::String(profile_name.clone());
             
                     save_config(&config_guard);
             
@@ -346,10 +362,14 @@ fn load_config() -> Value {
         config["profiles"] = serde_json::json!({}); // Initialize as empty object
     }
     if !config["currentProfile"].is_string() {
-        config["currentProfile"] = Value::Null; // Set to null
+        if let Some((first_profile, _)) = config["profiles"].as_object().unwrap().iter().next() {
+            config["currentProfile"] = serde_json::Value::String(first_profile.clone());
+        } else {
+            config["currentProfile"] = Value::Null; // Set to null if no profiles exist
+        }
     }
     if !config["lastSelectedProfile"].is_string() {
-        config["lastSelectedProfile"] = Value::Null; // Set to null
+        config["lastSelectedProfile"] = config["currentProfile"].clone();
     }
 
     config

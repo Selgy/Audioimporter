@@ -91,6 +91,9 @@ const Main: React.FC = () => {
     idBeingEditedRef.current = idBeingEdited;
   }, [idBeingEdited]);
 
+  useEffect(() => {
+    appendToDebugLog(`Current profile changed to: ${currentProfile}`);
+  }, [currentProfile]);
 
 
   // Function to append messages to the debug log
@@ -325,17 +328,22 @@ const Main: React.FC = () => {
 
   const addNewKeyBind = useCallback(
     (keyCombination: string) => {
-      appendToDebugLog(`Detected key combination: ${keyCombination}`);
+      appendToDebugLog(`Attempting to add new key bind: ${keyCombination}`);
       const normalizedCombination = normalizeKeyCombination(keyCombination);
       appendToDebugLog(`Normalized key combination: ${normalizedCombination}`);
   
-      // Ensure that the correct profile is being used
+      // Log the current state of profiles and currentProfile
+      appendToDebugLog(`Current profiles: ${JSON.stringify(profiles)}`);
+      appendToDebugLog(`Current profile: ${currentProfile}`);
+      appendToDebugLog(`Last profile ref: ${lastProfileRef.current}`);
+  
       const activeProfile = currentProfile || lastProfileRef.current;
   
       if (!activeProfile) {
         appendToDebugLog('Cannot add new binding: No current profile selected.');
         return;
       }
+  
   
       setConfigArray((prevConfig) => {
         if (prevConfig.some((kb) => kb.key === normalizedCombination)) {
@@ -376,6 +384,23 @@ useEffect(() => {
     }
   };
 }, []);
+
+
+useEffect(() => {
+  if (profiles.length > 0 && !currentProfile) {
+    const savedCurrentProfile = profiles.find(profile => profile === "123"); // Or however you want to determine the default profile
+    if (savedCurrentProfile) {
+      setCurrentProfile(savedCurrentProfile);
+      lastProfileRef.current = savedCurrentProfile;
+      appendToDebugLog(`Set current profile to saved profile: ${savedCurrentProfile}`);
+    } else {
+      setCurrentProfile(profiles[0]);
+      lastProfileRef.current = profiles[0];
+      appendToDebugLog(`Set current profile to first available profile: ${profiles[0]}`);
+    }
+  }
+}, [profiles, currentProfile]);
+
 
 function startWebSocketConnection() {
   if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
@@ -443,13 +468,30 @@ function startWebSocketConnection() {
         }
     }
 
-    // Handle profiles list message
-    if (data.startsWith('PROFILES:')) {
-        const profilesData = JSON.parse(data.replace('PROFILES:', ''));
-        setProfiles(profilesData);
-        setIsProfilesLoaded(true);  // Ensure this is set to true
-        appendToDebugLog('Profiles loaded');
+  // Handle profiles list message
+  if (data.startsWith('PROFILES:')) {
+    const profilesData = JSON.parse(data.replace('PROFILES:', ''));
+    setProfiles(profilesData);
+    setIsProfilesLoaded(true);
+    appendToDebugLog(`Profiles loaded: ${JSON.stringify(profilesData)}`);
+    
+    // If there's only one profile, set it as current
+    if (profilesData.length === 1 && !currentProfile) {
+      setCurrentProfile(profilesData[0]);
+      lastProfileRef.current = profilesData[0];
+      appendToDebugLog(`Automatically set current profile to: ${profilesData[0]}`);
     }
+  }
+
+  // Handle current profile message
+  if (data.startsWith('CURRENT_PROFILE:')) {
+    const currentProfileName = data.replace('CURRENT_PROFILE:', '').trim();
+    if (currentProfileName && currentProfileName !== 'None') {
+      setCurrentProfile(currentProfileName);
+      lastProfileRef.current = currentProfileName;
+      appendToDebugLog(`Current profile set to: ${currentProfileName}`);
+    }
+  }
 
 
     // Handle last selected profile message
@@ -492,15 +534,16 @@ function startWebSocketConnection() {
     }
     
 
-    // Handle profile creation
     if (data.startsWith('PROFILE_CREATED:')) {
-        const profileName = data.replace('PROFILE_CREATED:', '');
-        setProfiles((prev) => [...prev, profileName]);
-        setCurrentProfile(profileName);
-        setConfigArray([]); // Clear the bindings for the newly created profile
-        appendToDebugLog(`Profile created and switched to: ${profileName}`);
+      const profileName = data.replace('PROFILE_CREATED:', '');
+      setProfiles((prev) => [...prev, profileName]);
+      setCurrentProfile(profileName);
+      lastProfileRef.current = profileName; // Update the ref as well
+      setConfigArray([]); // Clear the bindings for the newly created profile
+      appendToDebugLog(`Profile created and switched to: ${profileName}`);
+      socketRef.current?.send(`SWITCH_PROFILE:${profileName}`);
+      loadConfig(profileName);
     }
-
     // Handle profile deletion
     if (data.startsWith('PROFILE_DELETED:')) {
         const profileName = data.replace('PROFILE_DELETED:', '');
@@ -703,11 +746,11 @@ function startWebSocketConnection() {
 
 
 
-  // Function to load profiles from the server
   const loadProfiles = () => {
     if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
       try {
         socketRef.current.send('GET_PROFILES');
+        socketRef.current.send('GET_CURRENT_PROFILE'); // Add this line to request the current profile
       } catch (error) {
         appendToDebugLog(`Error loading profiles: ${error}`);
       }
@@ -726,11 +769,20 @@ function startWebSocketConnection() {
   const handleCreateProfile = (profileName: string) => {
     if (profileName.trim()) {
       try {
+        appendToDebugLog(`Attempting to create profile: ${profileName}`);
+        
         socketRef.current?.send(`CREATE_PROFILE:${profileName}`);
         setProfiles((prevProfiles) => [...prevProfiles, profileName]);
         setCurrentProfile(profileName);
-        setConfigArray([]);
-        appendToDebugLog(`New profile created and switched to: ${profileName}`);
+        lastProfileRef.current = profileName; // Update the ref as well
+        setConfigArray([]); // Initialize with an empty config
+        appendToDebugLog(`New profile created: ${profileName}`);
+        
+        // Ensure the server knows about the new profile
+        socketRef.current?.send(`SWITCH_PROFILE:${profileName}`);
+        appendToDebugLog(`Switched to new profile: ${profileName}`);
+        
+        // Initialize with an empty config on the server
         const defaultConfig = {};
         socketRef.current?.send(
           `SAVE_CONFIG:${JSON.stringify({
@@ -738,7 +790,12 @@ function startWebSocketConnection() {
             config: defaultConfig,
           })}`
         );
-        appendToDebugLog(`New profile configuration saved for ${profileName}`);
+        appendToDebugLog(`Saved empty config for new profile: ${profileName}`);
+  
+        // Force a reload of the config to ensure everything is synchronized
+        loadConfig(profileName);
+        appendToDebugLog(`Triggered config reload for new profile: ${profileName}`);
+  
       } catch (error) {
         console.error("Error creating profile:", error);
         appendToDebugLog(`Error creating profile: ${error}`);
@@ -746,11 +803,10 @@ function startWebSocketConnection() {
     } else {
       appendToDebugLog("Attempted to create profile with empty name");
     }
-
+  
     // Close the modal regardless of success or error
     setIsCreateProfileModalOpen(false);
   };
-
 
   const deleteProfile = () => {
     setIsDeleteModalOpen(true);
