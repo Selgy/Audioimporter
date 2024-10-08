@@ -136,13 +136,19 @@ async fn handle_incoming_messages(
                 }
 
                 config_guard["profiles"][profile_name.clone()] = new_keybindings.clone();
-
-                if !config_guard["currentProfile"].is_string() {
-                    config_guard["currentProfile"] = serde_json::Value::String(profile_name.clone());
-                }
+                config_guard["currentProfile"] = serde_json::Value::String(profile_name.clone());
+                config_guard["lastSelectedProfile"] = serde_json::Value::String(profile_name.clone());
 
                 save_config(&config_guard);
-            } 
+
+                // Send a confirmation message back to the client
+                let mut write_guard = write.lock().await;
+                let _ = write_guard
+                    .send(Message::Text("CONFIG_SAVED".to_string()))
+                    .await;
+
+                println!("Config saved for profile: {}", profile_name);
+            }
             // Handle profile deletion
             else if text.starts_with("DELETE_PROFILE:") {
                 // Extract profile name from the message

@@ -379,20 +379,19 @@ useEffect(() => {
 
 function startWebSocketConnection() {
   if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-    appendToDebugLog('WebSocket already connected');
-    return;
+      appendToDebugLog('WebSocket already connected');
+      return;
   }
 
   appendToDebugLog('Establishing WebSocket connection...');
   socketRef.current = new WebSocket('ws://localhost:7878');  // Use the correct address
 
   socketRef.current.onopen = () => {
-    appendToDebugLog('Connected to server');
-    setIsWebSocketReady(true);  // Ensure this is set
-    loadProfiles();
-    socketRef.current?.send('GET_LAST_SELECTED_PROFILE');
+      appendToDebugLog('Connected to server');
+      setIsWebSocketReady(true);
+      loadProfiles();
+      socketRef.current?.send('GET_LAST_SELECTED_PROFILE');
   };
-  
 
   socketRef.current.onerror = (error) => {
     appendToDebugLog(`WebSocket Error: ${error}`);

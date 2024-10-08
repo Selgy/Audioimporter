@@ -1,1 +1,1 @@
-/Users/ocs0/Desktop/Audioimporter/src/target/release/audio_importer: /Users/ocs0/Desktop/Audioimporter/src/js/main/server.rs
+E:\DEV\AudioImporter\src\target\release\audio_importer.exe: E:\DEV\AudioImporter\src\js\main\server.rs
