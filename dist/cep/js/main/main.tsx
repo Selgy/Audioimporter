@@ -928,19 +928,7 @@ function startWebSocketConnection() {
                 </div>
               </div>
 
-              <div className="add-binding-container">
-                <input
-                  type="text"
-                  readOnly
-                  value={
-                    isListeningForKey
-                      ? isEditing
-                        ? `Editing ${keyBeingEdited || ''}: Press new key...`
-                        : 'Press a key combination...'
-                      : 'Click Add Binding to start'
-                  }
-                  className="key-binding-input"
-                />
+          <div className="add-binding-container">
                 <button
                   className="button"
                   onClick={addBinding}
