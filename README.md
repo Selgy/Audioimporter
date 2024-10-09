@@ -8,7 +8,7 @@
 - **Profils multiples** : Basculez entre différents setups de raccourcis pour s'adapter à vos différents types de projets, des clients ou des groupes de sound effects.
 - **Sélection de piste** : Choisissez la piste audio où chaque fichier doit être importé.
 - **Ajustements audio basiques** : Réglez le volume et le pitch pour chaque raccourci directement dans l'interface de l'extension.
-- **Compatibilité multiplateforme** : Compatible sur Windows, avec le support macOS à venir bientôt.
+- **Compatibilité multiplateforme** : Compatible sur Windows, avec le support macOS bientôt.
 
 **AudioImporter** vise à optimiser votre workflow en réduisant les actions répétitives lors de l'ajout d'audio à vos projets.
 
