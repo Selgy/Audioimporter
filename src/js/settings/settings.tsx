@@ -10,12 +10,7 @@ declare global {
 }
 
 const Settings: React.FC = () => {
-    const socketRef = useRef<WebSocket | null>(null);
-    const configRef = useRef<Config>({
-        currentProfile: '',
-        lastSelectedProfile: '',
-        profiles: {}
-    });
+
     const [config, setConfig] = useState<Config>({
         currentProfile: '',
         lastSelectedProfile: '',
@@ -23,16 +18,27 @@ const Settings: React.FC = () => {
     });
     const [debugLog, setDebugLog] = useState<string[]>([]);
     const [lastSelectedProfile, setLastSelectedProfile] = useState<string | null>(null);
-    useEffect(() => {
-        console.log('useEffect hook is running');
+    const [isConnected, setIsConnected] = useState(false);
+    const messageQueue: string[] = useRef([]).current;
+    const socketRef = useRef<WebSocket | null>(null);
+    const configRef = useRef<Config>({
+        currentProfile: '',
+        lastSelectedProfile: '',
+        profiles: {}
+    });
+
+useEffect(() => {
+    console.log('useEffect hook is running');
+    setTimeout(() => {
         startWebSocketConnection();
-        
-        return () => {
-            if (socketRef.current) {
-                socketRef.current.close();
-            }
-        };
-    }, []);
+    }, 2000); // 2 second delay
+    
+    return () => {
+        if (socketRef.current) {
+            socketRef.current.close();
+        }
+    };
+}, []);
 
     useEffect(() => {
         if (socketRef.current) {
@@ -85,42 +91,93 @@ const Settings: React.FC = () => {
             socketRef.current.onopen = () => {
                 console.log("WebSocket connected to Rust server");
                 appendToDebugLog("Connected to Rust server");
+                setIsConnected(true);
                 loadConfig();
+                
+                // Send any queued messages
+                while (messageQueue.length > 0) {
+                    const message = messageQueue.shift();
+                    if (message && socketRef.current) {
+                        socketRef.current.send(message);
+                    }
+                }
+            };
+    
+            socketRef.current.onmessage = (event) => {
+                const data = event.data;
+                appendToDebugLog(`Received message: ${data}`);
+                
+                if (typeof data === 'string') {
+                    if (data.startsWith('CONFIG:')) {
+                        const configData = JSON.parse(data.replace("CONFIG:", ""));
+                        setConfig(configData);
+                        configRef.current = configData;
+                        appendToDebugLog('Config loaded successfully from server');
+                        appendToDebugLog(`Updated config: ${JSON.stringify(configData, null, 2)}`);
+                    } else if (data.startsWith("COMBO:")) {
+                        const combo = data.replace("COMBO:", "");
+                        appendToDebugLog(`Combo received: ${combo}`);
+                        handleCombo(combo).catch(error => {
+                            appendToDebugLog(`Error in handleCombo: ${error}`);
+                        });
+                    } else if (data.startsWith("LAST_SELECTED_PROFILE:")) {
+                        const profile = data.replace("LAST_SELECTED_PROFILE:", "");
+                        setLastSelectedProfile(profile);
+                        appendToDebugLog(`Last selected profile set to: ${profile}`);
+                    }
+                }
             };
     
             socketRef.current.onerror = (error: Event) => {
                 console.error('WebSocket error encountered:', error);
                 appendToDebugLog(`WebSocket error: ${error instanceof ErrorEvent ? error.message : 'Unknown error'}`);
+                setIsConnected(false);
             };
     
             socketRef.current.onclose = (event: CloseEvent) => {
                 console.log(`WebSocket closed: ${event.reason}`);
                 appendToDebugLog(`WebSocket closed: ${event.reason}`);
-                setTimeout(startWebSocketConnection, 5000);
+                setIsConnected(false);
+                retryConnection();
             };
         } catch (error) {
             console.error("WebSocket connection failed:", error);
             appendToDebugLog("WebSocket connection failed: " + (error as Error).message);
+            setIsConnected(false);
+            retryConnection();
         }
     }, []);
+    
+    const retryConnection = useCallback(() => {
+        console.log("Attempting to reconnect...");
+        appendToDebugLog("Attempting to reconnect...");
+        setTimeout(() => {
+            startWebSocketConnection();
+        }, 5000); // Retry after 5 seconds
+    }, [startWebSocketConnection]);
+    
+    const sendMessage = useCallback((message: string) => {
+        if (isConnected && socketRef.current) {
+            socketRef.current.send(message);
+            appendToDebugLog(`Sent message: ${message}`);
+        } else {
+            messageQueue.push(message);
+            appendToDebugLog(`Message queued: ${message}`);
+        }
+    }, [isConnected]);
+    
+    const loadConfig = useCallback(() => {
+        appendToDebugLog("loadConfig called");
+        sendMessage('LOAD_CONFIG');
+        sendMessage('GET_LAST_SELECTED_PROFILE');
+    }, [sendMessage]);
 
     const appendToDebugLog = (message: string) => {
         console.log('Debug log:', message);
         setDebugLog(prevLog => [...prevLog, message]);
     };
 
-    const loadConfig = () => {
-        appendToDebugLog("loadConfig called");
-        try {
-            socketRef.current?.send('LOAD_CONFIG');
-            appendToDebugLog("Sent LOAD_CONFIG message");
-            socketRef.current?.send('GET_LAST_SELECTED_PROFILE');
-            appendToDebugLog("Sent GET_LAST_SELECTED_PROFILE message");
-        } catch (error: unknown) {
-            console.error('Error loading config:', error);
-            sendLogToPanel(`Error loading config: ${error}`);
-        }
-    };
+
 
     const reconnectWebSocket = () => {
         if (socketRef.current?.readyState === WebSocket.CLOSED) {
