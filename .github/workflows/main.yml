@@ -124,7 +124,7 @@ jobs:
 
       - name: Verify ZXP file
         run: |
-          if [ -f "./dist/zxp/com.AudioImporterV2.cep.zxp" ]; then
+          if [ -f "./dist/zxp/com.AudioImporter.cep.zxp" ]; then
             echo "ZXP file exists"
           else
             echo "ZXP file not found"
@@ -142,10 +142,10 @@ jobs:
           TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           # Zip the ZXP file for notarization
-          ditto -c -k --keepParent ./dist/zxp/com.AudioImporterV2.cep.zxp ./dist/zxp/com.AudioImporterV2.cep.zxp.zip
+          ditto -c -k --keepParent ./dist/zxp/com.AudioImporter.cep.zxp ./dist/zxp/com.AudioImporter.cep.zxp.zip
           
           # Submit for notarization and capture the entire output
-          NOTARY_SUBMIT_OUTPUT=$(xcrun notarytool submit ./dist/zxp/com.AudioImporterV2.cep.zxp.zip --wait --apple-id "$APPLE_ID" --password "$APPLE_ID_PASSWORD" --team-id "$TEAM_ID")
+          NOTARY_SUBMIT_OUTPUT=$(xcrun notarytool submit ./dist/zxp/com.AudioImporter.cep.zxp.zip --wait --apple-id "$APPLE_ID" --password "$APPLE_ID_PASSWORD" --team-id "$TEAM_ID")
           echo "Notary submit output:"
           echo "$NOTARY_SUBMIT_OUTPUT"
           
@@ -195,7 +195,7 @@ jobs:
         env:
             GITHUB_TOKEN: ${{ secrets.TOKEN_GITHUB }}
         with:
-            files: ./dist/zxp/com.AudioImporterV2.cep.zxp
+            files: ./dist/zxp/com.AudioImporter.cep.zxp
             tag_name: v1.0.0
             draft: false
             prerelease: false

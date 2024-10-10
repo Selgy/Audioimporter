@@ -3,8 +3,8 @@ import { version } from "./package.json";
 
 const config: CEP_Config = {
   version,
-  id: "com.AudioImporterV2.cep",
-  displayName: "Audio Importer V2",
+  id: "com.AudioImporter.cep",
+  displayName: "Audio Importer",
   symlink: "local",
   port: 3000,
   servePort: 5000,
@@ -27,7 +27,7 @@ const config: CEP_Config = {
     {
       mainPath: "./main/index.html",
       name: "main",
-      panelDisplayName: "Audio Importer V2",
+      panelDisplayName: "Audio Importer",
       autoVisible: true,
       width: 710,
       height: 500,
@@ -59,7 +59,7 @@ const config: CEP_Config = {
   zxp: {
     country: "FR",
     province: "CA",
-    org: "MyCompany",
+    org: "Selgy",
     password: "test",
     tsa: "http://timestamp.digicert.com/",
     sourceMap: false,
