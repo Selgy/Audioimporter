@@ -45,6 +45,9 @@ Pour installer le fichier `.zxp` de AudioImporter, suivez ces étapes en utilisa
 
 Les contributions, les problèmes et les demandes de fonctionnalités sont les bienvenus ! N'hésitez pas à consulter la page [issues](https://github.com/Selgyy/Audioimporter/issues) ou à soumettre une pull request.
 
+J'ai utilisé comme base, Bolt-cep que vous pouvez retrouver ici: https://hyperbrew.co/resources/bolt-cep
+
 ## Licence
 
 Ce projet est sous licence MIT - voir le fichier [LICENSE](LICENSE) pour plus de détails.
+
