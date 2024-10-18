@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <ExtensionManifest
 Version="6.0"
-ExtensionBundleId="com.AudioImporterV2.cep"
+ExtensionBundleId="com.AudioImporter.cep"
 ExtensionBundleVersion="0.0.1"
-ExtensionBundleName="Audio Importer V2"
+ExtensionBundleName="Audio Importer"
 xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 >
 <ExtensionList>
-  <Extension Id="com.AudioImporterV2.cep.main" Version="0.0.1" />
-  <Extension Id="com.AudioImporterV2.cep.settings" Version="0.0.1" />
+  <Extension Id="com.AudioImporter.cep.main" Version="0.0.1" />
+  <Extension Id="com.AudioImporter.cep.settings" Version="0.0.1" />
 </ExtensionList>
 <ExecutionEnvironment>
   <HostList>
@@ -22,7 +22,7 @@ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   </RequiredRuntimeList>
 </ExecutionEnvironment>
 <DispatchInfoList>
-  <Extension Id="com.AudioImporterV2.cep.main">
+  <Extension Id="com.AudioImporter.cep.main">
     <DispatchInfo>
       <Resources>
         <MainPath>./main/index.html</MainPath>
@@ -37,7 +37,7 @@ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
       </Lifecycle>
       <UI>
         <Type>Modeless</Type>
-        <Menu>Audio Importer V2</Menu>
+        <Menu>Audio Importer</Menu>
         <Geometry>
           <Size>
             <Width>710</Width>
@@ -61,7 +61,7 @@ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
       </UI>
     </DispatchInfo>
   </Extension>
-  <Extension Id="com.AudioImporterV2.cep.settings">
+  <Extension Id="com.AudioImporter.cep.settings">
     <DispatchInfo>
       <Resources>
         <MainPath>./settings/index.html</MainPath>
